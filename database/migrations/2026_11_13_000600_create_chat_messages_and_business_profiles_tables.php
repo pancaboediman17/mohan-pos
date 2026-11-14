@@ -30,7 +30,7 @@ return new class extends Migration
 
         DB::table('business_profiles')->insert([
             'id' => 1,
-            'business_name' => 'PRINTFLOW POS',
+            'business_name' => "MOHAN Digital Lab's",
             'phone' => null,
             'email' => null,
             'address' => null,

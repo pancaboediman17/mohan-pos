@@ -32,11 +32,17 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'chat_last_seen_at' => 'datetime',
         ];
     }
 
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function hasGlobalBranchAccess(): bool
+    {
+        return $this->hasRole('Owner');
     }
 }

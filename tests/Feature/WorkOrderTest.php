@@ -49,6 +49,10 @@ class WorkOrderTest extends TestCase
         $this->assertSame($hub->id, $workOrder->production_branch_id);
         $this->assertSame('waiting_design', $workOrder->status);
 
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/orders/'.$workOrder->order_id.'/confirm-completion')
+            ->assertStatus(409);
+
         $operator = User::factory()->create(['branch_id' => $hub->id]);
         $operator->assignRole('Operator Produksi');
         $this->actingAs($operator)
@@ -69,12 +73,24 @@ class WorkOrderTest extends TestCase
         WorkOrder::query()->update(['status' => 'queued']);
         $this->patchJson('/api/v1/work-orders/'.$workOrder->id, [
             'status' => 'printing',
+        ])->assertStatus(409);
+        $this->patchJson('/api/v1/work-orders/'.$workOrder->id, [
+            'status' => 'accepted',
+        ])->assertOk()->assertJsonPath('data.status', 'accepted');
+        $this->patchJson('/api/v1/work-orders/'.$workOrder->id, [
+            'status' => 'printing',
         ])->assertUnprocessable();
 
         foreach (WorkOrder::query()->get() as $itemWorkOrder) {
             $this->patchJson('/api/v1/work-orders/'.$itemWorkOrder->id, [
                 'production_machine_id' => $machine->id,
             ])->assertOk();
+
+            if ($itemWorkOrder->fresh()->status === 'queued') {
+                $this->patchJson('/api/v1/work-orders/'.$itemWorkOrder->id, [
+                    'status' => 'accepted',
+                ])->assertOk()->assertJsonPath('data.status', 'accepted');
+            }
 
             foreach ([
                 'printing',
@@ -91,10 +107,20 @@ class WorkOrderTest extends TestCase
 
         $this->assertDatabaseHas('orders', [
             'id' => $workOrder->order_id,
-            'status' => 'completed',
+            'status' => 'ready_for_confirmation',
         ]);
         $this->assertNotNull($workOrder->fresh()->started_at);
         $this->assertNotNull($workOrder->fresh()->completed_at);
+
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/orders/'.$workOrder->order_id.'/confirm-completion')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+        $this->assertDatabaseHas('orders', [
+            'id' => $workOrder->order_id,
+            'status' => 'completed',
+            'completed_confirmed_by' => $cashier->id,
+        ]);
     }
 
     private function createProduct(string $code = 'CETAK-001'): Product

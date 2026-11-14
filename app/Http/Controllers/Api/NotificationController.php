@@ -19,8 +19,30 @@ class NotificationController extends Controller
         if ($user->can('orders.view')) {
             $orders = Order::query()
                 ->where('status', '!=', 'cancelled')
-                ->when($user->branch_id, fn ($query) => $query->where('branch_id', $user->branch_id));
-            $pendingQuotes = (clone $orders)->where('quote_status', 'pending');
+                ->when(
+                    $user->branch_id && ! $user->hasGlobalBranchAccess(),
+                    fn ($query) => $query->where('branch_id', $user->branch_id),
+                );
+            $pendingMarketplaceOrders = (clone $orders)
+                ->where('sales_channel', '!=', 'pos')
+                ->where('quote_status', 'pending');
+            $pendingMarketplaceCount = $pendingMarketplaceOrders->count();
+
+            if ($pendingMarketplaceCount) {
+                $latestMarketplaceOrder = (clone $pendingMarketplaceOrders)->latest('created_at')->first();
+                $items[] = $this->notification(
+                    'pending_marketplace_orders',
+                    'Pesanan marketplace menunggu tinjauan',
+                    "{$latestMarketplaceOrder->order_number} perlu diperiksa sebelum masuk alur produksi.",
+                    $pendingMarketplaceCount,
+                    'orders',
+                    $latestMarketplaceOrder->created_at,
+                );
+            }
+
+            $pendingQuotes = (clone $orders)
+                ->where('sales_channel', 'pos')
+                ->where('quote_status', 'pending');
             $pendingQuoteCount = $pendingQuotes->count();
 
             if ($pendingQuoteCount) {
@@ -32,6 +54,22 @@ class NotificationController extends Controller
                     $pendingQuoteCount,
                     'orders',
                     $latestQuote->created_at,
+                );
+            }
+
+            $awaitingCompletion = (clone $orders)
+                ->where('status', 'ready_for_confirmation');
+            $awaitingCompletionCount = $awaitingCompletion->count();
+
+            if ($awaitingCompletionCount) {
+                $latestCompletedOrder = (clone $awaitingCompletion)->latest('updated_at')->first();
+                $items[] = $this->notification(
+                    'awaiting_completion_confirmation',
+                    'Produksi selesai menunggu konfirmasi admin',
+                    "{$latestCompletedOrder->order_number} perlu diperiksa sebelum diberitahukan kepada pelanggan.",
+                    $awaitingCompletionCount,
+                    'orders',
+                    $latestCompletedOrder->updated_at,
                 );
             }
 
@@ -58,7 +96,10 @@ class NotificationController extends Controller
         if ($user->can('inventory.view')) {
             $balances = DB::table('material_stock_movements')
                 ->selectRaw('material_id, SUM(quantity) as on_hand')
-                ->when($user->branch_id, fn ($query) => $query->where('branch_id', $user->branch_id))
+                ->when(
+                    $user->branch_id && ! $user->hasGlobalBranchAccess(),
+                    fn ($query) => $query->where('branch_id', $user->branch_id),
+                )
                 ->groupBy('material_id');
             $lowStock = Material::query()
                 ->leftJoinSub($balances, 'stock_balances', 'stock_balances.material_id', '=', 'materials.id')
@@ -84,8 +125,11 @@ class NotificationController extends Controller
         if ($user->can('production.view')) {
             $workOrders = WorkOrder::query()
                 ->with(['order:id,order_number', 'item:id,product_name'])
-                ->whereIn('status', ['waiting_design', 'queued'])
-                ->when($user->branch_id, fn ($query) => $query->where('production_branch_id', $user->branch_id));
+                ->whereIn('status', ['waiting_design', 'queued', 'accepted'])
+                ->when(
+                    $user->branch_id && ! $user->hasGlobalBranchAccess(),
+                    fn ($query) => $query->where('production_branch_id', $user->branch_id),
+                );
             $workOrderCount = (clone $workOrders)->count();
 
             if ($workOrderCount) {

@@ -26,6 +26,10 @@ class PaymentReceiptTest extends TestCase
         $cashier = User::factory()->create(['branch_id' => $branch->id]);
         $cashier->assignRole('Kasir');
 
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/cash-register/open', ['opening_cash' => 100000])
+            ->assertCreated();
+
         $order = Order::create([
             'order_number' => 'PF-RECEIPT-001',
             'branch_id' => $branch->id,

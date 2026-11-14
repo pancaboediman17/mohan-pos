@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashRegisterShift;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,7 +19,7 @@ class PaymentController extends Controller
         $user = $request->user();
 
         $payments = Payment::with(['order.customer', 'order.branch', 'receiver'])
-            ->when($user->branch_id, function ($query) use ($user) {
+            ->when($user->branch_id && ! $user->hasGlobalBranchAccess(), function ($query) use ($user) {
                 $query->whereHas('order', function ($q) use ($user) {
                     $q->where('branch_id', $user->branch_id);
                 });
@@ -36,6 +38,10 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'order_id' => ['required', 'exists:orders,id'],
             'amount' => ['required', 'numeric', 'gt:0'],
+            'payment_type' => [
+                'nullable',
+                'in:full,down_payment,installment,settlement',
+            ],
             'method' => [
                 'required',
                 'in:cash,transfer,qris,debit,credit,other',
@@ -54,9 +60,25 @@ class PaymentController extends Controller
 
             if (
                 $user->branch_id &&
+                ! $user->hasGlobalBranchAccess() &&
                 (int) $user->branch_id !== (int) $order->branch_id
             ) {
                 abort(404);
+            }
+
+            $cashRegisterShift = null;
+            if ($user->hasRole('Kasir') && ! $user->hasGlobalBranchAccess()) {
+                User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $cashRegisterShift = CashRegisterShift::query()
+                    ->where('active_user_id', $user->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $cashRegisterShift) {
+                    throw ValidationException::withMessages([
+                        'shift' => ['Buka kasir terlebih dahulu sebelum menerima pembayaran.'],
+                    ]);
+                }
             }
 
             if ($order->status === 'cancelled') {
@@ -74,11 +96,20 @@ class PaymentController extends Controller
                 ]);
             }
 
+            $paymentType = $validated['payment_type'] ?? (
+                abs($amount - $balance) < 0.005
+                    ? ((float) $order->paid_amount > 0 ? 'settlement' : 'full')
+                    : ((float) $order->paid_amount > 0 ? 'installment' : 'down_payment')
+            );
+            $this->validatePaymentType($order, $amount, $balance, $paymentType);
+
             $payment = Payment::create([
                 'payment_number' => 'TMP-' . Str::uuid(),
                 'order_id' => $order->id,
                 'received_by' => $user->id,
+                'cash_register_shift_id' => $cashRegisterShift?->id,
                 'amount' => $amount,
+                'payment_type' => $paymentType,
                 'method' => $validated['method'],
                 'reference_number' => $validated['reference_number'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -110,5 +141,29 @@ class PaymentController extends Controller
                 'receiver',
             ]),
         ], 201);
+    }
+
+    private function validatePaymentType(
+        Order $order,
+        float $amount,
+        float $balance,
+        string $paymentType,
+    ): void {
+        $hasPreviousPayment = (float) $order->paid_amount > 0;
+        $paysRemainingBalance = abs($amount - $balance) < 0.005;
+
+        $valid = match ($paymentType) {
+            'full' => ! $hasPreviousPayment && $paysRemainingBalance,
+            'down_payment' => ! $hasPreviousPayment && ! $paysRemainingBalance,
+            'installment' => $hasPreviousPayment && ! $paysRemainingBalance,
+            'settlement' => $hasPreviousPayment && $paysRemainingBalance,
+            default => false,
+        };
+
+        if (! $valid) {
+            throw ValidationException::withMessages([
+                'payment_type' => ['Jenis pembayaran tidak sesuai dengan sisa tagihan.'],
+            ]);
+        }
     }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, FileImage } from "lucide-react";
 import api from "../services/api";
+import BrandLogo from "./BrandLogo";
 
 export default function PublicDesignApproval({ token }) {
     const [design, setDesign] = useState(null);
@@ -74,9 +75,7 @@ export default function PublicDesignApproval({ token }) {
         <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
             <section className="panel mx-auto w-full max-w-4xl">
                 <header className="mb-6 border-b border-slate-800 pb-5">
-                    <p className="text-xs font-bold uppercase tracking-widest text-red-400">
-                        PRINTFLOW POS
-                    </p>
+                    <BrandLogo className="mb-4 h-[72px] w-56" />
                     <h1 className="mt-2 text-2xl font-bold text-white">
                         Persetujuan Desain
                     </h1>

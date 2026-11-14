@@ -29,6 +29,8 @@ class NotificationTest extends TestCase
 
         $this->createOrder($branch, $user, 'PF-NOTIFY-001', 'pending', 100, today()->addDays(3));
         $overdue = $this->createOrder($branch, $user, 'PF-NOTIFY-002', 'approved', 40, today()->subDay());
+        $awaitingCompletion = $this->createOrder($branch, $user, 'PF-NOTIFY-004', 'approved', 70, today()->addDays(3));
+        $awaitingCompletion->update(['status' => 'ready_for_confirmation']);
         $this->createOrder($otherBranch, $user, 'PF-NOTIFY-003', 'approved', 90, today()->subDay());
 
         $item = OrderItem::create([
@@ -44,7 +46,7 @@ class NotificationTest extends TestCase
             'order_id' => $overdue->id,
             'order_item_id' => $item->id,
             'production_branch_id' => $branch->id,
-            'status' => 'queued',
+            'status' => 'accepted',
         ]);
 
         $unit = Unit::create(['name' => 'Meter', 'symbol' => 'm', 'is_active' => true]);
@@ -67,15 +69,17 @@ class NotificationTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/notifications')
             ->assertOk()
-            ->assertJsonPath('data.count', 4)
+            ->assertJsonPath('data.count', 5)
             ->assertJsonPath('data.items.0.id', 'pending_quotes')
             ->assertJsonPath('data.items.0.count', 1)
-            ->assertJsonPath('data.items.1.id', 'overdue_orders')
+            ->assertJsonPath('data.items.1.id', 'awaiting_completion_confirmation')
             ->assertJsonPath('data.items.1.count', 1)
-            ->assertJsonPath('data.items.2.id', 'low_stock')
+            ->assertJsonPath('data.items.2.id', 'overdue_orders')
             ->assertJsonPath('data.items.2.count', 1)
-            ->assertJsonPath('data.items.3.id', 'production_queue')
-            ->assertJsonPath('data.items.3.count', 1);
+            ->assertJsonPath('data.items.3.id', 'low_stock')
+            ->assertJsonPath('data.items.3.count', 1)
+            ->assertJsonPath('data.items.4.id', 'production_queue')
+            ->assertJsonPath('data.items.4.count', 1);
     }
 
     public function test_notification_endpoint_requires_dashboard_permission(): void

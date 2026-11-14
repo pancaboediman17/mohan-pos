@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
     AlertCircle,
     Download,
+    FileSpreadsheet,
+    FileText,
     Factory,
     Package,
     RefreshCw,
@@ -32,6 +34,167 @@ const statusLabels = {
     ready: "Siap diambil",
     completed: "Selesai",
 };
+
+const datasetLabels = {
+    sales: "Penjualan",
+    finance: "Keuangan",
+    production: "Produksi",
+    inventory: "Inventori",
+};
+
+const formatLabels = {
+    csv: "CSV",
+    xlsx: "Excel",
+    pdf: "PDF",
+};
+
+function columnName(number) {
+    let result = "";
+    let value = number;
+
+    while (value > 0) {
+        const remainder = (value - 1) % 26;
+        result = String.fromCharCode(65 + remainder) + result;
+        value = Math.floor((value - 1) / 26);
+    }
+
+    return result;
+}
+
+function parseCsvReport(csv, Papa) {
+    const parsed = Papa.parse(csv, {
+        dynamicTyping: true,
+        header: true,
+        skipEmptyLines: true,
+    });
+
+    if (parsed.errors.length) {
+        throw new Error("Data CSV laporan tidak dapat dibaca untuk ekspor.");
+    }
+
+    return {
+        headers: parsed.meta.fields || [],
+        rows: parsed.data,
+    };
+}
+
+async function createExcelReport(csv, dataset, filters, branchName) {
+    const [excelModule, papaModule] = await Promise.all([
+        import("exceljs"),
+        import("papaparse"),
+    ]);
+    const ExcelJS = excelModule.default || excelModule;
+    const Papa = papaModule.default || papaModule;
+    const { headers, rows } = parseCsvReport(csv, Papa);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "MOHAN Digital Lab's";
+    workbook.subject = `Laporan ${datasetLabels[dataset]}`;
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet(datasetLabels[dataset]);
+    worksheet.columns = headers.map((header, index) => ({
+        key: `column_${index}`,
+        width: Math.min(42, Math.max(14, header.length + 3)),
+    }));
+    worksheet.addRow([`Laporan ${datasetLabels[dataset]}`]);
+    worksheet.addRow([`Periode: ${filters.from} s.d. ${filters.to}`]);
+    worksheet.addRow([`Cabang: ${branchName || "Semua cabang"}`]);
+    worksheet.addRow([]);
+    const headerRow = worksheet.addRow(headers);
+    rows.forEach((row) =>
+        worksheet.addRow(headers.map((header) => row[header] ?? "")),
+    );
+    worksheet.views = [{ state: "frozen", ySplit: 5 }];
+    worksheet.autoFilter = {
+        from: "A5",
+        to: `${columnName(headers.length)}${Math.max(5, rows.length + 5)}`,
+    };
+    worksheet.getRow(1).font = { bold: true, size: 16 };
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE10613" },
+    };
+    worksheet.eachRow((row) => {
+        row.eachCell((cell) => {
+            cell.alignment = { vertical: "middle" };
+            if (typeof cell.value === "number") {
+                cell.numFmt = "#,##0.##;[Red]-#,##0.##";
+            }
+        });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+}
+
+async function createPdfReport(csv, dataset, filters, branchName) {
+    const [pdfModule, tableModule, papaModule] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+        import("papaparse"),
+    ]);
+    const jsPDF =
+        pdfModule.jsPDF ||
+        pdfModule.default?.jsPDF ||
+        pdfModule.default ||
+        pdfModule;
+    const autoTable = tableModule.default || tableModule;
+    const Papa = papaModule.default || papaModule;
+    const { headers, rows } = parseCsvReport(csv, Papa);
+    const document = new jsPDF({
+        orientation: headers.length > 6 ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4",
+    });
+    const pageWidth = document.internal.pageSize.getWidth();
+    const margin = 12;
+
+    document.setFontSize(15);
+    document.text(`Laporan ${datasetLabels[dataset]}`, margin, 16);
+    document.setFontSize(9);
+    document.text(
+        `Periode: ${filters.from} s.d. ${filters.to}  |  Cabang: ${branchName || "Semua cabang"}`,
+        margin,
+        23,
+    );
+
+    autoTable(document, {
+        head: [headers],
+        body: rows.map((row) =>
+            headers.map((header) => String(row[header] ?? "")),
+        ),
+        startY: 29,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: headers.length > 7 ? 6 : 8, cellPadding: 2 },
+        headStyles: { fillColor: [225, 6, 19] },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        didDrawPage: () => {
+            document.setFontSize(8);
+            document.text(
+                `MOHAN Digital Lab's · ${datasetLabels[dataset]}`,
+                margin,
+                document.internal.pageSize.getHeight() - 7,
+            );
+        },
+    });
+
+    const pageCount = document.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+        document.setPage(page);
+        document.text(
+            `Halaman ${page} dari ${pageCount}`,
+            pageWidth - margin,
+            document.internal.pageSize.getHeight() - 7,
+            { align: "right" },
+        );
+    }
+
+    return document.output("blob");
+}
 
 function Metric({ icon: Icon, label, value, detail }) {
     return (
@@ -113,8 +276,9 @@ export default function ReportsDashboard() {
         loadReport();
     }, [loadReport]);
 
-    const exportReport = async (dataset) => {
-        setExporting(dataset);
+    const exportReport = async (dataset, format) => {
+        const exportKey = `${dataset}-${format}`;
+        setExporting(exportKey);
         setError("");
         try {
             const response = await api.get("/api/v1/reports/export", {
@@ -125,10 +289,29 @@ export default function ReportsDashboard() {
                 },
                 responseType: "blob",
             });
-            const url = URL.createObjectURL(response.data);
+            let file = response.data;
+            if (format !== "csv") {
+                const csv = await response.data.text();
+                file =
+                    format === "xlsx"
+                        ? await createExcelReport(
+                              csv,
+                              dataset,
+                              appliedFilters,
+                              report?.filters?.branch_name,
+                          )
+                        : await createPdfReport(
+                              csv,
+                              dataset,
+                              appliedFilters,
+                              report?.filters?.branch_name,
+                          );
+            }
+
+            const url = URL.createObjectURL(file);
             const link = document.createElement("a");
             link.href = url;
-            link.download = `printflow-${dataset}-${appliedFilters.from}-${appliedFilters.to}.csv`;
+            link.download = `mohan-digital-labs-${dataset}-${appliedFilters.from}-${appliedFilters.to}.${format}`;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -136,6 +319,7 @@ export default function ReportsDashboard() {
         } catch (requestError) {
             setError(
                 requestError.response?.data?.message ||
+                    requestError.message ||
                     "Ekspor gagal diunduh. Silakan coba lagi.",
             );
         } finally {
@@ -144,15 +328,24 @@ export default function ReportsDashboard() {
     };
 
     const summary = report?.summary;
-    const downloadButton = (dataset, label) => (
+    const downloadButton = (dataset, format) => (
         <button
             type="button"
-            className="secondary-button"
-            onClick={() => exportReport(dataset)}
+            className="secondary-button !px-2 !py-1.5 !text-xs"
+            onClick={() => exportReport(dataset, format)}
             disabled={Boolean(exporting) || loading}
+            aria-label={`Ekspor ${datasetLabels[dataset]} ke ${formatLabels[format]}`}
         >
-            <Download size={15} />
-            {exporting === dataset ? "Menyiapkan..." : label}
+            {format === "xlsx" ? (
+                <FileSpreadsheet size={14} />
+            ) : format === "pdf" ? (
+                <FileText size={14} />
+            ) : (
+                <Download size={14} />
+            )}
+            {exporting === `${dataset}-${format}`
+                ? "Menyiapkan..."
+                : formatLabels[format]}
         </button>
     );
 
@@ -251,12 +444,24 @@ export default function ReportsDashboard() {
                             Periode {report.filters.from} s.d. {report.filters.to}
                             {" · "}{report.filters.branch_name}
                         </p>
-                        <div className="flex flex-wrap gap-2">
-                            {downloadButton("sales", "Ekspor penjualan")}
-                            {downloadButton("finance", "Ekspor keuangan")}
-                            {downloadButton("production", "Ekspor produksi")}
-                            {downloadButton("inventory", "Ekspor inventori")}
-                        </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {Object.entries(datasetLabels).map(([dataset, label]) => (
+                            <div
+                                key={dataset}
+                                className="panel !p-3"
+                            >
+                                <p className="mb-3 text-sm font-semibold text-white">
+                                    {label}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {["csv", "xlsx", "pdf"].map((format) =>
+                                        downloadButton(dataset, format),
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

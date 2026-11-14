@@ -29,24 +29,24 @@ export default function DashboardOrderValueChart({
                     >
                         <stop
                             offset="0%"
-                            stopColor="#1479FF"
+                            stopColor="var(--mohan-red)"
                             stopOpacity={0.32}
                         />
                         <stop
                             offset="100%"
-                            stopColor="#1479FF"
+                            stopColor="var(--mohan-red)"
                             stopOpacity={0}
                         />
                     </linearGradient>
                 </defs>
                 <CartesianGrid
-                    stroke="#263244"
+                    stroke="var(--mohan-grid)"
                     strokeDasharray="4 4"
                     vertical={false}
                 />
                 <XAxis
                     dataKey="date"
-                    stroke="#64748b"
+                    stroke="var(--mohan-axis)"
                     tickLine={false}
                     axisLine={false}
                     minTickGap={24}
@@ -58,7 +58,7 @@ export default function DashboardOrderValueChart({
                     }
                 />
                 <YAxis
-                    stroke="#64748b"
+                    stroke="var(--mohan-axis)"
                     tickLine={false}
                     axisLine={false}
                     width={54}
@@ -78,17 +78,17 @@ export default function DashboardOrderValueChart({
                         })
                     }
                     contentStyle={{
-                        background: "#111827",
-                        border: "1px solid #334155",
+                        background: "var(--mohan-card)",
+                        border: "1px solid var(--mohan-border)",
                         borderRadius: "10px",
-                        color: "#fff",
+                        color: "var(--mohan-text)",
                     }}
                     formatter={(value) => [formatRupiah(value), "Nilai pesanan"]}
                 />
                 <Area
                     type="monotone"
                     dataKey="order_value"
-                    stroke="#1479FF"
+                    stroke="var(--mohan-red)"
                     strokeWidth={2.5}
                     fill="url(#adminOrderValueGradient)"
                     activeDot={{ r: 5, strokeWidth: 0 }}

@@ -73,6 +73,11 @@ function DocumentHeader({ documentType, number, branch }) {
     return (
         <header className="transaction-document__header">
             <div>
+                <img
+                    className="transaction-document__logo"
+                    src="/mohan-digital-labs-logo.png"
+                    alt="MOHAN Digital Lab's"
+                />
                 <p className="transaction-document__brand">
                     {businessProfile?.business_name ||
                         (profileError ? "Profil usaha tidak tersedia" : "Memuat profil usaha...")}

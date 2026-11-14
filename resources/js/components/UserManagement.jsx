@@ -261,7 +261,7 @@ export default function UserManagement({ user, canManage = false }) {
                         </h2>
                     </div>
                     <p className="text-sm text-slate-400 mt-1">
-                        Kelola akun, role, dan hak akses tim PRINTFLOW.
+                        Kelola akun, role, dan hak akses tim MOHAN Digital Lab's.
                     </p>
                 </div>
 

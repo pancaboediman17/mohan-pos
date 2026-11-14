@@ -3,11 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashRegisterShift;
 use App\Models\FinishingType;
 use App\Models\Order;
+use App\Models\OrderCustomerFile;
+use App\Models\Payment;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -22,15 +27,19 @@ class OrderController extends Controller
 
         $user = $request->user();
 
-        $orders = Order::with(['customer', 'branch', 'creator'])
-            ->when($user->branch_id, function ($query) use ($user) {
+        $orders = Order::with(['customer', 'branch', 'creator', 'shipment'])
+            ->when($user->branch_id && ! $user->hasGlobalBranchAccess(), function ($query) use ($user) {
                 $query->where('branch_id', $user->branch_id);
             })
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('order_number', 'like', "%{$search}%")
+                        ->orWhere('external_order_id', 'like', "%{$search}%")
                         ->orWhereHas('customer', function ($customerQuery) use ($search) {
                             $customerQuery->where('name', 'like', "%{$search}%");
+                        })
+                        ->orWhereHas('shipment', function ($shipmentQuery) use ($search) {
+                            $shipmentQuery->where('recipient_name', 'like', "%{$search}%");
                         });
                 });
             })
@@ -54,6 +63,56 @@ class OrderController extends Controller
                 'items.product',
                 'items.finishings',
                 'payments.receiver',
+                'shipment',
+                'customerFiles:id,order_id,order_item_id,original_filename,mime_type,file_size,note,created_at',
+                'customerFiles.item:id,product_name',
+            ]),
+        ]);
+    }
+
+    public function confirmCompletion(Request $request, Order $order)
+    {
+        $this->authorizeBranch($request, $order);
+
+        $confirmedOrder = DB::transaction(function () use ($request, $order) {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            abort_unless(
+                $lockedOrder->status === 'ready_for_confirmation',
+                409,
+                'Pesanan belum menunggu konfirmasi penyelesaian.',
+            );
+
+            $workOrderStatuses = $lockedOrder->workOrders()
+                ->lockForUpdate()
+                ->pluck('status');
+            abort_unless(
+                $workOrderStatuses->isNotEmpty()
+                    && $workOrderStatuses->every(fn ($status) => $status === 'completed'),
+                409,
+                'Semua Work Order harus selesai sebelum pesanan dikonfirmasi.',
+            );
+
+            $lockedOrder->update([
+                'status' => 'completed',
+                'completed_confirmed_at' => now(),
+                'completed_confirmed_by' => $request->user()->id,
+            ]);
+
+            return $lockedOrder;
+        });
+
+        return response()->json([
+            'message' => 'Penyelesaian pesanan berhasil dikonfirmasi.',
+            'data' => $confirmedOrder->load([
+                'customer',
+                'branch',
+                'creator',
+                'items.product',
+                'items.finishings',
+                'payments.receiver',
+                'shipment',
+                'customerFiles:id,order_id,order_item_id,original_filename,mime_type,file_size,note,created_at',
+                'customerFiles.item:id,product_name',
             ]),
         ]);
     }
@@ -66,6 +125,27 @@ class OrderController extends Controller
             'discount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'due_date' => ['nullable', 'date'],
+            'order_type' => ['sometimes', Rule::in(['invoice', 'pos'])],
+            'initial_payment' => [
+                'prohibited_unless:order_type,pos',
+                'required_if:order_type,pos',
+                'array',
+            ],
+            'initial_payment.type' => [
+                'required_if:order_type,pos',
+                Rule::in(['full', 'down_payment']),
+            ],
+            'initial_payment.amount' => [
+                'required_if:order_type,pos',
+                'numeric',
+                'gt:0',
+            ],
+            'initial_payment.method' => [
+                'required_if:order_type,pos',
+                Rule::in(['cash', 'transfer', 'qris', 'debit', 'credit', 'other']),
+            ],
+            'initial_payment.reference_number' => ['nullable', 'string', 'max:100'],
+            'initial_payment.notes' => ['nullable', 'string', 'max:2000'],
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
@@ -74,6 +154,13 @@ class OrderController extends Controller
             'items.*.height' => ['nullable', 'numeric', 'min:0.01'],
             'items.*.specifications' => ['nullable', 'string'],
             'items.*.notes' => ['nullable', 'string'],
+            'items.*.reference_image' => [
+                'nullable',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:10240',
+            ],
             'items.*.finishing_type_ids' => ['sometimes', 'array'],
             'items.*.finishing_type_ids.*' => [
                 'integer',
@@ -87,12 +174,27 @@ class OrderController extends Controller
         ]);
 
         $user = $request->user();
+        $orderType = $validated['order_type'] ?? 'invoice';
+        if ($orderType === 'pos' && ! $user->can('payments.create')) {
+            abort(403, 'Anda tidak memiliki izin menerima pembayaran.');
+        }
         $approvalToken = Str::random(64);
 
         // Pengguna cabang tidak boleh membuat transaksi untuk cabang lain.
-        $branchId = $user->branch_id ?: ($validated['branch_id'] ?? null);
+        $branchId = $user->hasGlobalBranchAccess()
+            ? ($validated['branch_id'] ?? $user->branch_id)
+            : ($user->branch_id ?: ($validated['branch_id'] ?? null));
+        $storedPaths = [];
 
-        $order = DB::transaction(function () use ($validated, $user, $branchId, $approvalToken) {
+        try {
+            $order = DB::transaction(function () use (
+                $validated,
+                $user,
+                $branchId,
+                $orderType,
+                $approvalToken,
+                &$storedPaths,
+            ) {
             $preparedItems = [];
             $subtotal = 0;
 
@@ -153,6 +255,7 @@ class OrderController extends Controller
                         'finishing_code' => $finishingType->code,
                         'unit_cost' => $finishingType->default_cost,
                     ])->all(),
+                    'reference_image' => $item['reference_image'] ?? null,
                 ];
             }
 
@@ -171,6 +274,7 @@ class OrderController extends Controller
                 'order_number' => 'TMP-'.Str::uuid(),
                 'quote_status' => 'pending',
                 'quote_approval_token_hash' => hash('sha256', $approvalToken),
+                'order_type' => $orderType,
                 'branch_id' => $branchId,
                 'customer_id' => $validated['customer_id'] ?? null,
                 'created_by' => $user->id,
@@ -193,10 +297,51 @@ class OrderController extends Controller
             foreach ($preparedItems as $preparedItem) {
                 $orderItem = $order->items()->create($preparedItem['attributes']);
                 $orderItem->finishings()->createMany($preparedItem['finishings']);
+
+                if ($preparedItem['reference_image']) {
+                    $image = $preparedItem['reference_image'];
+                    $fileName = Str::uuid().'.'.$image->extension();
+                    $path = $image->storeAs(
+                        'customer-uploads/'.$order->id,
+                        $fileName,
+                        'local',
+                    );
+
+                    if (! $path) {
+                        throw new \RuntimeException('Gambar referensi gagal disimpan.');
+                    }
+
+                    $storedPaths[] = $path;
+                    OrderCustomerFile::create([
+                        'order_id' => $order->id,
+                        'order_item_id' => $orderItem->id,
+                        'file_path' => $path,
+                        'original_filename' => mb_substr(
+                            $image->getClientOriginalName(),
+                            0,
+                            255,
+                        ),
+                        'mime_type' => $image->getMimeType() ?: 'application/octet-stream',
+                        'file_size' => $image->getSize(),
+                        'note' => 'Referensi item saat pesanan dibuat.',
+                    ]);
+                }
+            }
+
+            if ($orderType === 'pos') {
+                $this->recordInitialPayment(
+                    $order,
+                    $user,
+                    $validated['initial_payment'],
+                );
             }
 
             return $order;
-        });
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($storedPaths);
+            throw $exception;
+        }
 
         return response()->json([
             'message' => 'Pesanan berhasil dibuat.',
@@ -206,14 +351,82 @@ class OrderController extends Controller
                 'branch',
                 'creator',
                 'items.finishings',
+                'payments.receiver',
+                'customerFiles:id,order_id,order_item_id,original_filename,mime_type,file_size,note,created_at',
+                'customerFiles.item:id,product_name',
             ]),
         ], 201);
+    }
+
+    private function recordInitialPayment(Order $order, User $user, array $paymentData): void
+    {
+        $amount = round((float) $paymentData['amount'], 2);
+        $total = round((float) $order->total, 2);
+        $paymentType = $paymentData['type'];
+
+        if (
+            $amount > $total ||
+            ($paymentType === 'full' && $amount !== $total) ||
+            ($paymentType === 'down_payment' && $amount >= $total)
+        ) {
+            throw ValidationException::withMessages([
+                'initial_payment.amount' => [
+                    $paymentType === 'full'
+                        ? 'Pembayaran lunas harus sama dengan total pesanan.'
+                        : 'Nominal DP harus lebih kecil dari total pesanan.',
+                ],
+            ]);
+        }
+
+        $cashRegisterShift = null;
+        if ($user->hasRole('Kasir') && ! $user->hasGlobalBranchAccess()) {
+            User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $cashRegisterShift = CashRegisterShift::query()
+                ->where('active_user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $cashRegisterShift) {
+                throw ValidationException::withMessages([
+                    'shift' => ['Buka kasir terlebih dahulu sebelum menerima pembayaran.'],
+                ]);
+            }
+        }
+
+        $payment = Payment::create([
+            'payment_number' => 'TMP-'.Str::uuid(),
+            'order_id' => $order->id,
+            'received_by' => $user->id,
+            'cash_register_shift_id' => $cashRegisterShift?->id,
+            'amount' => $amount,
+            'payment_type' => $paymentType,
+            'method' => $paymentData['method'],
+            'reference_number' => $paymentData['reference_number'] ?? null,
+            'notes' => $paymentData['notes'] ?? null,
+            'paid_at' => now(),
+        ]);
+        $payment->update([
+            'payment_number' => 'PAY-'.now()->format('Y').'-'.
+                str_pad($payment->id, 6, '0', STR_PAD_LEFT),
+        ]);
+
+        $balance = round($total - $amount, 2);
+        $order->update([
+            'paid_amount' => $amount,
+            'balance' => max(0, $balance),
+            'payment_status' => $balance <= 0 ? 'paid' : 'partial',
+        ]);
     }
 
     public function approvalLink(Request $request, Order $order)
     {
         $this->authorizeBranch($request, $order);
 
+        abort_if(
+            $order->sales_channel !== 'pos',
+            409,
+            'Pesanan marketplace harus disetujui staf, bukan melalui tautan pelanggan.',
+        );
         abort_unless(
             $order->quote_status === 'pending',
             409,
@@ -236,6 +449,7 @@ class OrderController extends Controller
 
         if (
             $user->branch_id &&
+            ! $user->hasGlobalBranchAccess() &&
             (int) $user->branch_id !== (int) $order->branch_id
         ) {
             abort(404);

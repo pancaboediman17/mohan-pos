@@ -11,7 +11,9 @@ class Payment extends Model
         'payment_number',
         'order_id',
         'received_by',
+        'cash_register_shift_id',
         'amount',
+        'payment_type',
         'method',
         'reference_number',
         'notes',
@@ -34,5 +36,10 @@ class Payment extends Model
     public function receiver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by');
+    }
+
+    public function cashRegisterShift(): BelongsTo
+    {
+        return $this->belongsTo(CashRegisterShift::class);
     }
 }

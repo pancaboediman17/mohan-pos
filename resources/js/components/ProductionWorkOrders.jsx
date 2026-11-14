@@ -10,12 +10,14 @@ import {
     Upload,
 } from "lucide-react";
 import api from "../services/api";
+import CustomerReferenceFiles from "./CustomerReferenceFiles";
 
 const stages = {
     waiting_design: "Menunggu desain",
     design_approval: "Menunggu persetujuan desain",
     design_revision: "Perlu revisi desain",
     queued: "Antrean cetak",
+    accepted: "Diterima produksi",
     printing: "Sedang dicetak",
     finishing: "Finishing",
     quality_check: "Pemeriksaan QC",
@@ -24,7 +26,8 @@ const stages = {
 };
 
 const nextStage = {
-    queued: ["printing", "Mulai cetak"],
+    queued: ["accepted", "Terima pekerjaan"],
+    accepted: ["printing", "Mulai produksi"],
     printing: ["finishing", "Lanjut finishing"],
     finishing: ["quality_check", "Kirim ke QC"],
     quality_check: ["ready", "Lulus QC"],
@@ -93,7 +96,8 @@ export default function ProductionWorkOrders({
                     Number(summary.waiting_design || 0) +
                     Number(summary.design_approval || 0) +
                     Number(summary.design_revision || 0) +
-                    Number(summary.queued || 0),
+                    Number(summary.queued || 0) +
+                    Number(summary.accepted || 0),
                 running:
                     Number(summary.printing || 0) +
                     Number(summary.finishing || 0),
@@ -345,6 +349,10 @@ export default function ProductionWorkOrders({
                                                 {[item.specifications, item.notes].filter(Boolean).join(" · ")}
                                             </p>
                                         )}
+                                        <CustomerReferenceFiles
+                                            orderId={workOrder.order?.id}
+                                            files={workOrder.order?.customer_files || []}
+                                        />
                                         <p className="mt-2 text-xs text-slate-500">
                                             Lokasi produksi: {workOrder.production_branch?.name || "Belum ditentukan"}
                                             {workOrder.machine

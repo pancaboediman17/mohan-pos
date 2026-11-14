@@ -76,22 +76,7 @@ class QuoteApprovalController extends Controller
             ]);
 
             if ($approved) {
-                $productionBranchId = Branch::query()
-                    ->where('is_active', true)
-                    ->where('is_production_hub', true)
-                    ->orderBy('id')
-                    ->value('id');
-
-                $order->items()->pluck('id')->each(function (int $orderItemId) use ($order, $productionBranchId) {
-                    WorkOrder::query()->firstOrCreate(
-                        ['order_item_id' => $orderItemId],
-                        [
-                            'order_id' => $order->id,
-                            'production_branch_id' => $productionBranchId,
-                            'status' => 'waiting_design',
-                        ],
-                    );
-                });
+                $this->createWorkOrders($order);
             }
         });
 
@@ -100,6 +85,45 @@ class QuoteApprovalController extends Controller
                 ? 'Penawaran berhasil disetujui.'
                 : 'Penawaran ditolak.',
             'quote_status' => $validated['decision'] === 'approve' ? 'approved' : 'rejected',
+        ]);
+    }
+
+    public function confirmMarketplace(Request $request, Order $order)
+    {
+        $this->authorizeBranch($request, $order);
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $confirmedOrder = DB::transaction(function () use ($order, $validated) {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            abort_if(
+                $lockedOrder->sales_channel === 'pos',
+                409,
+                'Konfirmasi staf hanya berlaku untuk pesanan marketplace.',
+            );
+            abort_unless(
+                $lockedOrder->quote_status === 'pending' && $lockedOrder->status !== 'cancelled',
+                409,
+                'Pesanan marketplace ini tidak lagi menunggu tinjauan.',
+            );
+
+            $lockedOrder->update([
+                'quote_status' => 'approved',
+                'quote_approval_token_hash' => null,
+                'quote_approved_at' => now(),
+                'quote_rejected_at' => null,
+                'quote_response_note' => $validated['note'] ?? null,
+            ]);
+            $this->createWorkOrders($lockedOrder);
+
+            return $lockedOrder;
+        });
+
+        return response()->json([
+            'message' => 'Pesanan marketplace disetujui dan diteruskan ke alur desain.',
+            'data' => $confirmedOrder->load(['customer', 'branch', 'items', 'shipment']),
         ]);
     }
 
@@ -116,5 +140,38 @@ class QuoteApprovalController extends Controller
         );
 
         return $order;
+    }
+
+    private function createWorkOrders(Order $order): void
+    {
+        $productionBranchId = Branch::query()
+            ->where('is_active', true)
+            ->where('is_production_hub', true)
+            ->orderBy('id')
+            ->value('id');
+
+        $order->items()->pluck('id')->each(function (int $orderItemId) use ($order, $productionBranchId) {
+            WorkOrder::query()->firstOrCreate(
+                ['order_item_id' => $orderItemId],
+                [
+                    'order_id' => $order->id,
+                    'production_branch_id' => $productionBranchId,
+                    'status' => 'waiting_design',
+                ],
+            );
+        });
+    }
+
+    private function authorizeBranch(Request $request, Order $order): void
+    {
+        $user = $request->user();
+
+        if (
+            $user->branch_id &&
+            ! $user->hasGlobalBranchAccess() &&
+            (int) $user->branch_id !== (int) $order->branch_id
+        ) {
+            abort(404);
+        }
     }
 }

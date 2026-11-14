@@ -28,7 +28,10 @@ class ReportController extends Controller
             ->where('orders.quote_status', 'approved')
             ->where('orders.status', '!=', 'cancelled')
             ->when($branchId, fn (Builder $query) => $query->where('orders.branch_id', $branchId));
-        $periodOrders = fn () => (clone $orders)->whereBetween('orders.created_at', [$from, $to]);
+        $periodOrders = fn () => (clone $orders)->whereRaw(
+            'DATE(COALESCE(orders.external_order_date, orders.created_at)) BETWEEN ? AND ?',
+            [$from->toDateString(), $to->toDateString()],
+        );
         $payments = Payment::query()
             ->whereBetween('paid_at', [$from, $to])
             ->whereHas('order', fn (Builder $query) => $query
@@ -43,8 +46,8 @@ class ReportController extends Controller
             ->when($branchId, fn (Builder $query) => $query->where('material_stock_movements.branch_id', $branchId));
 
         $salesByDay = $periodOrders()
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as order_count, SUM(total) as order_value')
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->selectRaw('DATE(COALESCE(orders.external_order_date, orders.created_at)) as date, COUNT(*) as order_count, SUM(total) as order_value')
+            ->groupBy(DB::raw('DATE(COALESCE(orders.external_order_date, orders.created_at))'))
             ->get()
             ->keyBy('date');
         $paymentsByDay = (clone $payments)
@@ -211,7 +214,7 @@ class ReportController extends Controller
             };
 
             fclose($stream);
-        }, "printflow-{$dataset}-{$from->toDateString()}-{$to->toDateString()}.csv", [
+        }, "mohan-digital-labs-{$dataset}-{$from->toDateString()}-{$to->toDateString()}.csv", [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
@@ -234,8 +237,10 @@ class ReportController extends Controller
         $to = $toDate->endOfDay();
 
         $user = $request->user();
-        $requestedBranch = $validated['branch_id'] ?? null;
-        if ($user->branch_id) {
+        $requestedBranch = isset($validated['branch_id'])
+            ? (int) $validated['branch_id']
+            : null;
+        if ($user->branch_id && ! $user->hasGlobalBranchAccess()) {
             if ($requestedBranch && (int) $requestedBranch !== (int) $user->branch_id) {
                 abort(403, 'Anda tidak dapat melihat laporan cabang lain.');
             }
@@ -247,7 +252,7 @@ class ReportController extends Controller
             $branchId = $requestedBranch;
         }
 
-        $branches = $user->branch_id
+        $branches = $user->branch_id && ! $user->hasGlobalBranchAccess()
             ? Branch::query()->whereKey($user->branch_id)->get(['id', 'name'])
             : ($user->can('branches.view')
                 ? Branch::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
@@ -271,14 +276,17 @@ class ReportController extends Controller
             ->with(['customer:id,name', 'branch:id,name'])
             ->where('quote_status', 'approved')
             ->where('status', '!=', 'cancelled')
-            ->whereBetween('created_at', [$from, $to])
+            ->whereRaw(
+                'DATE(COALESCE(external_order_date, created_at)) BETWEEN ? AND ?',
+                [$from->toDateString(), $to->toDateString()],
+            )
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->orderBy('id')
             ->chunk(500, function ($orders) use ($stream) {
                 foreach ($orders as $order) {
                     fputcsv($stream, [
                         $this->csvCell($order->order_number),
-                        $order->created_at->toDateTimeString(),
+                        ($order->external_order_date ?? $order->created_at)->toDateTimeString(),
                         $this->csvCell($order->customer?->name ?? 'Pelanggan Umum'),
                         $this->csvCell($order->branch?->name ?? 'Tanpa cabang'),
                         $order->total,

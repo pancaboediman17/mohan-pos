@@ -1,10 +1,14 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
+    "name": "mohan-digital-labs-pos",
     "private": true,
     "type": "module",
     "scripts": {
         "build": "vite build",
         "dev": "vite"
+    },
+    "overrides": {
+        "uuid": "^11.1.1"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -16,7 +20,11 @@
         "vite": "^7.0.7"
     },
     "dependencies": {
+        "exceljs": "^4.4.0",
+        "jspdf": "^4.2.1",
+        "jspdf-autotable": "^5.0.9",
         "lucide-react": "^1.71.0",
+        "papaparse": "^5.7.1",
         "react": "^19.3.1",
         "react-dom": "^19.3.1",
         "recharts": "^3.10.1"

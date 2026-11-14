@@ -12,7 +12,10 @@ class CashierDashboardController extends Controller
     {
         $user = $request->user();
         $orders = Order::query()
-            ->when($user->branch_id, fn ($query) => $query->where('branch_id', $user->branch_id));
+            ->when(
+                $user->branch_id && ! $user->hasGlobalBranchAccess(),
+                fn ($query) => $query->where('branch_id', $user->branch_id),
+            );
 
         $todayOrders = (clone $orders)
             ->whereDate('created_at', today())

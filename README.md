@@ -1,4 +1,4 @@
-# PRINTFLOW POS
+# MOHAN Digital Lab's
 
 Sistem operasional percetakan berbasis Laravel API dan React untuk pesanan, pembayaran, produksi, inventory, laporan, dan pengelolaan karyawan.
 
@@ -6,10 +6,16 @@ Sistem operasional percetakan berbasis Laravel API dan React untuk pesanan, pemb
 
 - POS: pesanan, pelanggan, produk/jasa, pembayaran, kuitansi, dan invoice.
 - Produksi: work order, persetujuan desain/penawaran, finishing, dan pemakaian material.
+- Alur file pelanggan: admin membagikan tautan unggah yang berlaku 30 hari; file referensi tersimpan privat dan dapat diunduh oleh admin serta produksi.
+- Serah-terima produksi: operator menerima Work Order sebelum memulai, lalu menyelesaikan tahap cetak, finishing, dan QC. Setelah semua item selesai, admin mengonfirmasi pesanan dan dapat membuka WhatsApp dengan pesan siap kirim; pengiriman pesan tetap dilakukan manual.
+- Marketplace: impor CSV berformat template MOHAN Digital Lab's untuk Shopee, Tokopedia, TikTok Shop, dan Lazada; pesanan wajib ditinjau staf sebelum masuk alur desain/produksi.
+- Pengiriman: alamat, kurir, resi, ongkir, dan status dicatat manual pada detail pesanan. Belum ada booking kurir, pelacakan otomatis, atau sinkronisasi marketplace.
 - Operasional: cabang, supplier, mesin, laporan, dan chat internal.
 - HR: karyawan, absensi manual atau impor CSV, cuti, payroll, bonus, dan slip gaji.
 
 Payroll saat ini dikelola HR secara manual. Pajak dan BPJS tidak dihitung otomatis. Impor absensi menerima CSV sesuai template di laman HR; baris duplikat dilewati dan data lama tidak ditimpa.
+
+Impor marketplace memakai template CSV MOHAN Digital Lab's yang bisa diunduh dari laman Pesanan (satu baris per item; kolom pesanan diulang untuk setiap item). Kode produk harus cocok dengan SKU aktif. SKU tidak dikenal menolak seluruh pesanan terkait. Status pembayaran marketplace hanya disimpan sebagai informasi pembeli dan tidak dicatat sebagai penerimaan atau settlement.
 
 ## Teknologi dan prasyarat
 

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useState, useEffect } from "react";
-import api, { setAuthToken } from "./services/api";
+import api, { getAuthToken, setAuthToken } from "./services/api";
 import { createRoot } from "react-dom/client";
+import BrandLogo from "./components/BrandLogo";
 import {
     LayoutDashboard,
     ShoppingCart,
@@ -38,7 +39,9 @@ const Customers = lazy(() => import("./components/Customers"));
 const Products = lazy(() => import("./components/Products"));
 const ProductMasters = lazy(() => import("./components/ProductMasters"));
 const BranchManagement = lazy(() => import("./components/BranchManagement"));
-const SupplierManagement = lazy(() => import("./components/SupplierManagement"));
+const SupplierManagement = lazy(
+    () => import("./components/SupplierManagement"),
+);
 const MachineManagement = lazy(() => import("./components/MachineManagement"));
 const FinishingTypes = lazy(() => import("./components/FinishingTypes"));
 const OperationalModules = lazy(
@@ -53,6 +56,10 @@ const PublicQuoteApproval = lazy(
 const PublicDesignApproval = lazy(
     () => import("./components/PublicDesignApproval"),
 );
+const PublicCustomerUpload = lazy(
+    () => import("./components/PublicCustomerUpload"),
+);
+const CashierRegister = lazy(() => import("./components/CashierRegister"));
 
 function ModuleLoading() {
     return (
@@ -101,9 +108,7 @@ const menuItems = [
     },
     {
         title: "HRD",
-        items: [
-            { id: "hr", label: "HR & Karyawan", icon: Users },
-        ],
+        items: [{ id: "hr", label: "HR & Karyawan", icon: Users }],
     },
     {
         title: "PENGATURAN",
@@ -112,7 +117,11 @@ const menuItems = [
             { id: "branches", label: "Multi-Cabang", icon: Truck },
             { id: "suppliers", label: "Master Supplier", icon: Truck },
             { id: "machines", label: "Master Mesin Produksi", icon: Printer },
-            { id: "finishing-types", label: "Master Jenis Finishing", icon: Tags },
+            {
+                id: "finishing-types",
+                label: "Master Jenis Finishing",
+                icon: Tags,
+            },
             { id: "settings", label: "Pengaturan", icon: Settings },
         ],
     },
@@ -168,10 +177,10 @@ function formatRupiah(value) {
 
 function StatusBadge({ status, color }) {
     const styles = {
-        blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+        blue: "bg-red-500/10 text-red-400 border-red-500/20",
         yellow: "bg-amber-500/10 text-amber-400 border-amber-500/20",
         green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-        purple: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+        purple: "bg-slate-500/10 text-slate-300 border-slate-500/20",
     };
 
     return (
@@ -204,7 +213,15 @@ function DashboardMetricCard({ title, value, caption, icon: Icon, tone }) {
 // SIDEBAR
 // ==========================================
 
-function Sidebar({ active, setActive, role, user, onLogout, businessProfile }) {
+function Sidebar({
+    active,
+    setActive,
+    role,
+    user,
+    onLogout,
+    businessProfile,
+    chatUnreadCount,
+}) {
     const avatar = user?.name?.trim()?.charAt(0)?.toUpperCase() || "U";
     const visibleMenuItems = getVisibleMenuItems(role, user);
 
@@ -220,11 +237,7 @@ function Sidebar({ active, setActive, role, user, onLogout, businessProfile }) {
     return (
         <aside className="sidebar">
             <div className="brand">
-                <div className="brand-logo">P</div>
-                <div>
-                    <h1>{businessProfile?.business_name || "PRINTFLOW POS"}</h1>
-                    <p>Printing Management System</p>
-                </div>
+                <BrandLogo className="sidebar-brand-logo" />
             </div>
 
             <div className="profile">
@@ -248,6 +261,10 @@ function Sidebar({ active, setActive, role, user, onLogout, businessProfile }) {
 
                         {group.items.map((item) => {
                             const Icon = item.icon;
+                            const badge =
+                                item.id === "chat"
+                                    ? chatUnreadCount
+                                    : item.badge;
 
                             return (
                                 <button
@@ -260,9 +277,9 @@ function Sidebar({ active, setActive, role, user, onLogout, businessProfile }) {
                                     <Icon size={18} />
                                     <span>{item.label}</span>
 
-                                    {item.badge && (
+                                    {badge > 0 && (
                                         <span className="menu-badge">
-                                            {item.badge}
+                                            {badge > 99 ? "99+" : badge}
                                         </span>
                                     )}
                                 </button>
@@ -292,6 +309,7 @@ function Header({
     user,
     businessProfile,
     theme,
+    chatUnreadCount,
     onToggleTheme,
     setActive,
     onLogout,
@@ -327,6 +345,8 @@ function Header({
         role === "Owner" || user?.permissions?.includes("settings.manage");
     const canViewNotifications =
         role === "Owner" || user?.permissions?.includes("dashboard.view");
+    const canAccessChat =
+        role === "Owner" || user?.permissions?.includes("chat.access");
     const loadNotifications = useCallback(async () => {
         setNotificationLoading(true);
         setNotificationError("");
@@ -374,7 +394,7 @@ function Header({
                 </h2>
 
                 <p className="text-xs text-slate-500 mt-1">
-                    {businessProfile?.business_name || "PRINTFLOW POS"} /{" "}
+                    {businessProfile?.business_name || "MOHAN Digital Lab's"} /{" "}
                     {titles[active] || "Dashboard"}
                 </p>
             </div>
@@ -397,7 +417,7 @@ function Header({
                         placeholder="Cari menu..."
                         aria-label="Cari menu"
                     />
-                    <span>⌘ K</span>
+                    <span>⌘</span>
                 </div>
                 {searchOpen && (
                     <div className="absolute right-0 top-11 z-30 w-72 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
@@ -443,104 +463,144 @@ function Header({
                     </span>
                 </button>
 
-                {canViewNotifications && (
-                <div className="relative">
+                {canAccessChat && (
                     <button
                         type="button"
-                        className="notification-button"
+                        className="notification-button relative"
                         onClick={() => {
-                            const nextOpen = !notificationOpen;
-                            setNotificationOpen(nextOpen);
-                            if (nextOpen) loadNotifications();
+                            setActive("chat");
+                            setNotificationOpen(false);
                             setProfileOpen(false);
                         }}
                         aria-label={
-                            notifications.count
-                                ? `Notifikasi, ${notifications.count} perlu perhatian`
-                                : "Notifikasi"
+                            chatUnreadCount
+                                ? `Chat, ${chatUnreadCount} pesan belum dibaca`
+                                : "Buka chat"
                         }
-                        aria-expanded={notificationOpen}
+                        title="Buka Chat"
                     >
-                        <Bell size={19} />
-                        {notifications.count > 0 && (
+                        <MessageCircle size={19} />
+                        {chatUnreadCount > 0 && (
                             <span className="notification-count absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold">
-                                {notifications.count > 99
-                                    ? "99+"
-                                    : notifications.count}
+                                {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
                             </span>
                         )}
                     </button>
-                    {notificationOpen && (
-                        <div className="absolute right-0 top-11 z-30 w-80 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-2xl">
-                            <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-2 pb-3">
-                                <div>
-                                    <p className="font-semibold text-white">
-                                        Perlu perhatian
-                                    </p>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                        Ringkasan aktivitas yang masih terbuka
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
-                                    onClick={loadNotifications}
-                                    disabled={notificationLoading}
-                                    aria-label="Muat ulang notifikasi"
-                                >
-                                    <RefreshCw
-                                        size={15}
-                                        className={notificationLoading ? "animate-spin" : ""}
-                                    />
-                                </button>
-                            </div>
-                            {notificationError ? (
-                                <p className="px-2 py-4 text-sm text-rose-300" role="alert">
-                                    {notificationError}
-                                </p>
-                            ) : notificationLoading ? (
-                                <p className="px-2 py-4 text-sm text-slate-400" role="status">
-                                    Memuat notifikasi...
-                                </p>
-                            ) : notifications.items.length ? (
-                                <>
-                                    <div className="max-h-80 space-y-1 overflow-y-auto py-2">
-                                        {notifications.items.map((item) => (
-                                            <button
-                                                key={item.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setActive(item.target);
-                                                    setNotificationOpen(false);
-                                                }}
-                                                className="w-full rounded-lg p-3 text-left hover:bg-slate-800"
-                                            >
-                                                <span className="flex items-start justify-between gap-3">
-                                                    <span className="text-sm font-medium text-white">
-                                                        {item.title}
-                                                    </span>
-                                                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300">
-                                                        {item.count}
-                                                    </span>
-                                                </span>
-                                                <span className="mt-1 block text-xs leading-5 text-slate-400">
-                                                    {item.description}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="border-t border-slate-800 px-2 pt-3 text-xs text-slate-500">
-                                        {notifications.count} item perlu ditindaklanjuti
-                                    </p>
-                                </>
-                            ) : (
-                                <p className="px-2 py-4 text-sm text-slate-400">
-                                    Tidak ada aktivitas yang perlu ditindaklanjuti.
-                                </p>
+                )}
+
+                {canViewNotifications && (
+                    <div className="relative">
+                        <button
+                            type="button"
+                            className="notification-button"
+                            onClick={() => {
+                                const nextOpen = !notificationOpen;
+                                setNotificationOpen(nextOpen);
+                                if (nextOpen) loadNotifications();
+                                setProfileOpen(false);
+                            }}
+                            aria-label={
+                                notifications.count
+                                    ? `Notifikasi, ${notifications.count} perlu perhatian`
+                                    : "Notifikasi"
+                            }
+                            aria-expanded={notificationOpen}
+                        >
+                            <Bell size={19} />
+                            {notifications.count > 0 && (
+                                <span className="notification-count absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold">
+                                    {notifications.count > 99
+                                        ? "99+"
+                                        : notifications.count}
+                                </span>
                             )}
-                        </div>
-                    )}
-                </div>
+                        </button>
+                        {notificationOpen && (
+                            <div className="absolute right-0 top-11 z-30 w-80 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-2xl">
+                                <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-2 pb-3">
+                                    <div>
+                                        <p className="font-semibold text-white">
+                                            Perlu perhatian
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Ringkasan aktivitas yang masih
+                                            terbuka
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+                                        onClick={loadNotifications}
+                                        disabled={notificationLoading}
+                                        aria-label="Muat ulang notifikasi"
+                                    >
+                                        <RefreshCw
+                                            size={15}
+                                            className={
+                                                notificationLoading
+                                                    ? "animate-spin"
+                                                    : ""
+                                            }
+                                        />
+                                    </button>
+                                </div>
+                                {notificationError ? (
+                                    <p
+                                        className="px-2 py-4 text-sm text-rose-300"
+                                        role="alert"
+                                    >
+                                        {notificationError}
+                                    </p>
+                                ) : notificationLoading ? (
+                                    <p
+                                        className="px-2 py-4 text-sm text-slate-400"
+                                        role="status"
+                                    >
+                                        Memuat notifikasi...
+                                    </p>
+                                ) : notifications.items.length ? (
+                                    <>
+                                        <div className="max-h-80 space-y-1 overflow-y-auto py-2">
+                                            {notifications.items.map((item) => (
+                                                <button
+                                                    key={item.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setActive(item.target);
+                                                        setNotificationOpen(
+                                                            false,
+                                                        );
+                                                    }}
+                                                    className="w-full rounded-lg p-3 text-left hover:bg-slate-800"
+                                                >
+                                                    <span className="flex items-start justify-between gap-3">
+                                                        <span className="text-sm font-medium text-white">
+                                                            {item.title}
+                                                        </span>
+                                                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                                                            {item.count}
+                                                        </span>
+                                                    </span>
+                                                    <span className="mt-1 block text-xs leading-5 text-slate-400">
+                                                        {item.description}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="border-t border-slate-800 px-2 pt-3 text-xs text-slate-500">
+                                            {notifications.count} item perlu
+                                            ditindaklanjuti
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="px-2 py-4 text-sm text-slate-400">
+                                        Tidak ada aktivitas yang perlu
+                                        ditindaklanjuti.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 <div className="hidden sm:block h-8 w-px bg-slate-800"></div>
@@ -652,7 +712,12 @@ function AdminDashboard({ user, setActive }) {
     const periodLabel = `${days} hari terakhir`;
     const statusItems = [
         { key: "pending", label: "Menunggu", color: "#f59e0b" },
-        { key: "processing", label: "Diproses", color: "#3b82f6" },
+        { key: "processing", label: "Diproses", color: "#e10613" },
+        {
+            key: "ready_for_confirmation",
+            label: "Menunggu konfirmasi admin",
+            color: "#f97316",
+        },
         { key: "completed", label: "Selesai", color: "#10b981" },
         { key: "cancelled", label: "Dibatalkan", color: "#64748b" },
     ];
@@ -660,8 +725,11 @@ function AdminDashboard({ user, setActive }) {
         (total, item) => total + Number(statusCounts[item.key] || 0),
         0,
     );
-    const canOpenOrders = user?.permissions?.includes("orders.view");
-    const canOpenPayments = user?.permissions?.includes("payments.view");
+    const isOwner = user?.roles?.includes("Owner");
+    const canOpenOrders =
+        isOwner || user?.permissions?.includes("orders.view");
+    const canOpenPayments =
+        isOwner || user?.permissions?.includes("payments.view");
 
     return (
         <div className="space-y-6">
@@ -685,14 +753,19 @@ function AdminDashboard({ user, setActive }) {
                         id="dashboard-period"
                         className="dark-select"
                         value={days}
-                        onChange={(event) => setDays(Number(event.target.value))}
+                        onChange={(event) =>
+                            setDays(Number(event.target.value))
+                        }
                     >
                         <option value={7}>7 hari terakhir</option>
                         <option value={30}>30 hari terakhir</option>
                     </select>
                     {branches.length > 1 && (
                         <>
-                            <label className="sr-only" htmlFor="dashboard-branch">
+                            <label
+                                className="sr-only"
+                                htmlFor="dashboard-branch"
+                            >
                                 Filter cabang
                             </label>
                             <select
@@ -763,9 +836,7 @@ function AdminDashboard({ user, setActive }) {
                 />
                 <DashboardMetricCard
                     title="Nilai pesanan"
-                    value={
-                        summary ? formatRupiah(summary.order_value) : "—"
-                    }
+                    value={summary ? formatRupiah(summary.order_value) : "—"}
                     caption={
                         summary
                             ? comparisonText(
@@ -779,9 +850,7 @@ function AdminDashboard({ user, setActive }) {
                 <DashboardMetricCard
                     title="Pembayaran masuk"
                     value={
-                        summary
-                            ? formatRupiah(summary.payments_received)
-                            : "—"
+                        summary ? formatRupiah(summary.payments_received) : "—"
                     }
                     caption={
                         summary
@@ -849,9 +918,7 @@ function AdminDashboard({ user, setActive }) {
                     <section className="panel">
                         <div className="panel-header">
                             <div>
-                                <h3 className="panel-title">
-                                    Alur pesanan
-                                </h3>
+                                <h3 className="panel-title">Alur pesanan</h3>
                                 <p className="panel-subtitle">
                                     Status order · {periodLabel}
                                 </p>
@@ -895,17 +962,12 @@ function AdminDashboard({ user, setActive }) {
                     <section className="panel">
                         <div className="panel-header">
                             <div>
-                                <h3 className="panel-title">
-                                    Perlu perhatian
-                                </h3>
+                                <h3 className="panel-title">Perlu perhatian</h3>
                                 <p className="panel-subtitle">
                                     Ringkasan tindakan operasional
                                 </p>
                             </div>
-                            <AlertCircle
-                                size={19}
-                                className="text-amber-400"
-                            />
+                            <AlertCircle size={19} className="text-amber-400" />
                         </div>
                         <div className="mt-5 space-y-4">
                             <div className="flex items-center justify-between gap-3">
@@ -1008,6 +1070,10 @@ function AdminDashboard({ user, setActive }) {
                                             processing: {
                                                 label: "Diproses",
                                                 color: "blue",
+                                            },
+                                            ready_for_confirmation: {
+                                                label: "Menunggu konfirmasi admin",
+                                                color: "yellow",
                                             },
                                             completed: {
                                                 label: "Selesai",
@@ -1152,6 +1218,7 @@ function CashierDashboard({
     const [dashboard, setDashboard] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [registerOpen, setRegisterOpen] = useState(false);
 
     const loadDashboard = useCallback(async () => {
         setLoading(true);
@@ -1177,6 +1244,10 @@ function CashierDashboard({
     const orderStatus = {
         pending: { label: "Menunggu", color: "yellow" },
         processing: { label: "Diproses", color: "blue" },
+        ready_for_confirmation: {
+            label: "Menunggu konfirmasi admin",
+            color: "yellow",
+        },
         completed: { label: "Selesai", color: "green" },
         cancelled: { label: "Dibatalkan", color: "purple" },
     };
@@ -1227,11 +1298,15 @@ function CashierDashboard({
                     type="button"
                     className="cashier-action green-action"
                     onClick={onOpenPayments}
-                    disabled={!canCreatePayment}
+                    disabled={!canCreatePayment || !registerOpen}
                 >
                     <CreditCard size={27} />
                     <span>Pembayaran</span>
-                    <small>DP dan pelunasan</small>
+                    <small>
+                        {registerOpen
+                            ? "DP dan pelunasan"
+                            : "Buka kasir untuk menerima pembayaran"}
+                    </small>
                 </button>
                 <button
                     type="button"
@@ -1243,6 +1318,8 @@ function CashierDashboard({
                     <small>Lihat perkembangan pesanan</small>
                 </button>
             </div>
+
+            <CashierRegister onShiftChange={setRegisterOpen} />
 
             {error && (
                 <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
@@ -1287,9 +1364,7 @@ function CashierDashboard({
                                 Nilai Pesanan Hari Ini
                             </p>
                             <h3 className="mt-2 text-xl font-bold text-white">
-                                {!dashboard
-                                    ? "—"
-                                    : formatRupiah(sales)}
+                                {!dashboard ? "—" : formatRupiah(sales)}
                             </h3>
                         </div>
                         <div className="stat-icon">
@@ -1309,7 +1384,9 @@ function CashierDashboard({
                             <h3 className="mt-2 text-2xl font-bold text-white">
                                 {!dashboard
                                     ? "—"
-                                    : Number(dashboard?.outstanding_orders || 0)}
+                                    : Number(
+                                          dashboard?.outstanding_orders || 0,
+                                      )}
                             </h3>
                         </div>
                         <div className="stat-icon text-amber-400">
@@ -1320,9 +1397,7 @@ function CashierDashboard({
                         Sisa tagihan{" "}
                         {!dashboard
                             ? "—"
-                            : formatRupiah(
-                                  dashboard?.outstanding_balance || 0,
-                              )}
+                            : formatRupiah(dashboard?.outstanding_balance || 0)}
                     </p>
                 </div>
             </div>
@@ -1333,7 +1408,10 @@ function CashierDashboard({
                         <div>
                             <h3 className="panel-title">Pesanan Aktif</h3>
                             <p className="panel-subtitle">
-                                Pesanan terbaru di {dashboard?.branch_name || user?.branch?.name || "cabang Anda"}
+                                Pesanan terbaru di{" "}
+                                {dashboard?.branch_name ||
+                                    user?.branch?.name ||
+                                    "cabang Anda"}
                             </p>
                         </div>
                         <button
@@ -1385,16 +1463,18 @@ function CashierDashboard({
                                     </tr>
                                 ) : dashboard?.recent_orders?.length ? (
                                     dashboard.recent_orders.map((order) => {
-                                        const orderState =
-                                            orderStatus[order.status] || {
-                                                label: order.status,
-                                                color: "blue",
-                                            };
-                                        const paymentState =
-                                            paymentStatus[order.payment_status] || {
-                                                label: order.payment_status,
-                                                color: "blue",
-                                            };
+                                        const orderState = orderStatus[
+                                            order.status
+                                        ] || {
+                                            label: order.status,
+                                            color: "blue",
+                                        };
+                                        const paymentState = paymentStatus[
+                                            order.payment_status
+                                        ] || {
+                                            label: order.payment_status,
+                                            color: "blue",
+                                        };
 
                                         return (
                                             <tr key={order.id}>
@@ -1410,14 +1490,20 @@ function CashierDashboard({
                                                 </td>
                                                 <td>
                                                     <StatusBadge
-                                                        status={orderState.label}
+                                                        status={
+                                                            orderState.label
+                                                        }
                                                         color={orderState.color}
                                                     />
                                                 </td>
                                                 <td>
                                                     <StatusBadge
-                                                        status={paymentState.label}
-                                                        color={paymentState.color}
+                                                        status={
+                                                            paymentState.label
+                                                        }
+                                                        color={
+                                                            paymentState.color
+                                                        }
                                                     />
                                                 </td>
                                             </tr>
@@ -1429,7 +1515,8 @@ function CashierDashboard({
                                             colSpan="5"
                                             className="py-8 text-center text-slate-500"
                                         >
-                                            Belum ada pesanan aktif di cabang ini.
+                                            Belum ada pesanan aktif di cabang
+                                            ini.
                                         </td>
                                     </tr>
                                 )}
@@ -1441,7 +1528,9 @@ function CashierDashboard({
                 <div className="panel">
                     <h3 className="panel-title">Ringkasan Hari Ini</h3>
                     <p className="panel-subtitle">
-                        {dashboard?.branch_name || user?.branch?.name || "Semua Cabang"}
+                        {dashboard?.branch_name ||
+                            user?.branch?.name ||
+                            "Semua Cabang"}
                     </p>
 
                     <div className="space-y-5 mt-6">
@@ -1455,9 +1544,7 @@ function CashierDashboard({
                                         Total Transaksi
                                     </p>
                                     <p className="text-lg text-white font-bold">
-                                        {!dashboard
-                                            ? "—"
-                                            : transactions}
+                                        {!dashboard ? "—" : transactions}
                                     </p>
                                 </div>
                             </div>
@@ -1472,9 +1559,7 @@ function CashierDashboard({
                                         Total Omzet
                                     </p>
                                     <p className="text-lg text-white font-bold">
-                                        {!dashboard
-                                            ? "—"
-                                            : formatRupiah(sales)}
+                                        {!dashboard ? "—" : formatRupiah(sales)}
                                     </p>
                                 </div>
                             </div>
@@ -1517,13 +1602,19 @@ function CashierDashboard({
 
 function App() {
     const [user, setUser] = useState(null);
+    const [chatUnreadCount, setChatUnreadCount] = useState(0);
     const [businessProfile, setBusinessProfile] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [active, setActive] = useState("dashboard");
     const [openOrderCreate, setOpenOrderCreate] = useState(false);
+    const [orderCreateMode, setOrderCreateMode] = useState("invoice");
     const [openPaymentCreate, setOpenPaymentCreate] = useState(false);
     const [theme, setTheme] = useState(() => {
-        return localStorage.getItem("printflow_theme") || "light";
+        return (
+            localStorage.getItem("mohan_digital_labs_theme") ||
+            localStorage.getItem("printflow_theme") ||
+            "light"
+        );
     });
 
     useEffect(() => {
@@ -1538,7 +1629,8 @@ function App() {
 
     useEffect(() => {
         document.documentElement.setAttribute("data-theme", theme);
-        localStorage.setItem("printflow_theme", theme);
+        localStorage.setItem("mohan_digital_labs_theme", theme);
+        localStorage.removeItem("printflow_theme");
     }, [theme]);
 
     const handleToggleTheme = () => {
@@ -1546,6 +1638,7 @@ function App() {
     };
 
     const handleNewOrder = () => {
+        setOrderCreateMode("pos");
         setActive("orders");
         setOpenOrderCreate(true);
     };
@@ -1558,7 +1651,7 @@ function App() {
     // Memeriksa sesi login ketika aplikasi dibuka
     useEffect(() => {
         const checkAuth = async () => {
-            const token = sessionStorage.getItem("printflow_token");
+            const token = getAuthToken();
 
             if (!token) {
                 setAuthLoading(false);
@@ -1589,7 +1682,10 @@ function App() {
         const handleProfileUpdate = (event) => {
             setBusinessProfile(event.detail);
         };
-        window.addEventListener("business-profile-updated", handleProfileUpdate);
+        window.addEventListener(
+            "business-profile-updated",
+            handleProfileUpdate,
+        );
 
         api.get("/api/v1/public/business-profile")
             .then((response) => {
@@ -1608,8 +1704,68 @@ function App() {
         };
     }, [user]);
 
+    useEffect(() => {
+        if (!user?.permissions?.includes("chat.access")) {
+            setChatUnreadCount(0);
+            return undefined;
+        }
+
+        let mounted = true;
+        const loadChatUnread = async () => {
+            try {
+                const response = await api.get("/api/v1/chat/unread");
+                if (mounted) {
+                    setChatUnreadCount(
+                        Number(response.data?.data?.total_unread_count) || 0,
+                    );
+                }
+            } catch (error) {
+                console.error("Notifikasi chat gagal dimuat:", error);
+            }
+        };
+        const updateChatUnread = (event) => {
+            const count = Number(event.detail);
+            if (Number.isFinite(count)) setChatUnreadCount(count);
+        };
+        const heartbeat = async () => {
+            try {
+                await api.post("/api/v1/chat/presence", { online: true });
+            } catch (error) {
+                console.error("Status online chat gagal diperbarui:", error);
+            }
+        };
+
+        loadChatUnread();
+        heartbeat();
+        const unreadInterval = window.setInterval(loadChatUnread, 15000);
+        const presenceInterval = window.setInterval(heartbeat, 30000);
+        window.addEventListener("chat-unread-updated", updateChatUnread);
+        window.addEventListener("focus", loadChatUnread);
+        window.addEventListener("focus", heartbeat);
+
+        return () => {
+            mounted = false;
+            window.clearInterval(unreadInterval);
+            window.clearInterval(presenceInterval);
+            window.removeEventListener(
+                "chat-unread-updated",
+                updateChatUnread,
+            );
+            window.removeEventListener("focus", loadChatUnread);
+            window.removeEventListener("focus", heartbeat);
+        };
+    }, [user]);
+
     // Logout
     const handleLogout = async () => {
+        if (user?.permissions?.includes("chat.access")) {
+            try {
+                await api.post("/api/v1/chat/presence", { online: false });
+            } catch (error) {
+                console.error("Status offline chat gagal diperbarui:", error);
+            }
+        }
+
         try {
             await api.post("/api/v1/logout");
         } catch (error) {
@@ -1631,7 +1787,7 @@ function App() {
                         className="text-red-500 mx-auto mb-4 animate-pulse"
                     />
                     <p className="text-slate-400 text-sm">
-                        Memeriksa sesi PRINTFLOW...
+                        Memeriksa sesi MOHAN Digital Lab's...
                     </p>
                 </div>
             </div>
@@ -1659,6 +1815,7 @@ function App() {
                 user={user}
                 onLogout={handleLogout}
                 businessProfile={businessProfile}
+                chatUnreadCount={chatUnreadCount}
             />
 
             <main className="main-content">
@@ -1668,6 +1825,7 @@ function App() {
                     user={user}
                     businessProfile={businessProfile}
                     theme={theme}
+                    chatUnreadCount={chatUnreadCount}
                     onToggleTheme={handleToggleTheme}
                     setActive={setActive}
                     onLogout={handleLogout}
@@ -1690,24 +1848,6 @@ function App() {
                                         user.permissions?.includes(
                                             "payments.create",
                                         )
-                                    }
-                                    canManageProduction={
-                                        role === "Owner" ||
-                                        user.permissions?.includes(
-                                            "production.manage",
-                                        )
-                                    }
-                                    canManageDesigns={
-                                        role === "Owner" ||
-                                        user.permissions?.includes("designs.manage")
-                                    }
-                                    canManageInventory={
-                                        role === "Owner" ||
-                                        user.permissions?.includes("inventory.manage")
-                                    }
-                                    canConsumeInventory={
-                                        role === "Owner" ||
-                                        user.permissions?.includes("inventory.consume")
                                     }
                                     onNewOrder={handleNewOrder}
                                     onOpenPayments={handleOpenPayments}
@@ -1745,7 +1885,9 @@ function App() {
                             <Products
                                 canManage={
                                     role === "Owner" ||
-                                    user.permissions?.includes("products.manage")
+                                    user.permissions?.includes(
+                                        "products.manage",
+                                    )
                                 }
                             />
                         )}
@@ -1825,10 +1967,37 @@ function App() {
                                     role === "Owner" ||
                                     user.permissions?.includes("orders.edit")
                                 }
+                                canSelectBranch={role === "Owner"}
+                                defaultBranchId={user.branch?.id || ""}
                                 canCreatePayment={
                                     role === "Owner" ||
                                     user.permissions?.includes(
                                         "payments.create",
+                                    )
+                                }
+                                orderCreateMode={orderCreateMode}
+                                canManageProduction={
+                                    role === "Owner" ||
+                                    user.permissions?.includes(
+                                        "production.manage",
+                                    )
+                                }
+                                canManageDesigns={
+                                    role === "Owner" ||
+                                    user.permissions?.includes(
+                                        "designs.manage",
+                                    )
+                                }
+                                canManageInventory={
+                                    role === "Owner" ||
+                                    user.permissions?.includes(
+                                        "inventory.manage",
+                                    )
+                                }
+                                canConsumeInventory={
+                                    role === "Owner" ||
+                                    user.permissions?.includes(
+                                        "inventory.consume",
                                     )
                                 }
                                 openOrderCreate={openOrderCreate}
@@ -1845,8 +2014,9 @@ function App() {
                 </div>
 
                 <footer className="app-footer">
-                    {businessProfile?.business_name || "PRINTFLOW POS"} © {new Date().getFullYear()}
-                    {" · "}Smart Print Business, One Flow
+                    {businessProfile?.business_name || "MOHAN Digital Lab's"} ©{" "}
+                    {new Date().getFullYear()}
+                    {" · "}Digital & Printing
                 </footer>
             </main>
         </div>
@@ -1855,6 +2025,7 @@ function App() {
 
 const quoteToken = new URLSearchParams(window.location.search).get("quote");
 const designToken = new URLSearchParams(window.location.search).get("design");
+const uploadToken = new URLSearchParams(window.location.search).get("upload");
 
 createRoot(document.getElementById("app")).render(
     quoteToken ? (
@@ -1864,6 +2035,10 @@ createRoot(document.getElementById("app")).render(
     ) : designToken ? (
         <Suspense fallback={<ModuleLoading />}>
             <PublicDesignApproval token={designToken} />
+        </Suspense>
+    ) : uploadToken ? (
+        <Suspense fallback={<ModuleLoading />}>
+            <PublicCustomerUpload token={uploadToken} />
         </Suspense>
     ) : (
         <App />

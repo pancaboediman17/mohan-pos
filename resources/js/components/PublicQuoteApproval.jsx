@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Printer } from "lucide-react";
 import api from "../services/api";
+import BrandLogo from "./BrandLogo";
 import { InvoicePrintDocument } from "./TransactionDocuments";
 
 const money = (value) =>
@@ -82,9 +83,7 @@ export default function PublicQuoteApproval({ token }) {
         <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
             <section className="panel mx-auto w-full max-w-3xl">
                 <div className="mb-6 border-b border-slate-800 pb-5">
-                    <p className="text-xs font-bold uppercase tracking-widest text-red-400">
-                        PRINTFLOW POS
-                    </p>
+                    <BrandLogo className="mb-4 h-[72px] w-56" />
                     <h1 className="mt-2 text-2xl font-bold text-white">
                         Persetujuan Penawaran
                     </h1>
@@ -250,8 +249,8 @@ export default function PublicQuoteApproval({ token }) {
                             >
                                 <CheckCircle2 size={18} />
                                 {decision === "approved"
-                                    ? "Penawaran telah disetujui. Tim PRINTFLOW akan menindaklanjuti pesanan."
-                                    : "Penawaran telah ditolak. Tim PRINTFLOW akan menghubungi Anda."}
+                                    ? "Penawaran telah disetujui. Tim MOHAN Digital Lab's akan menindaklanjuti pesanan."
+                                    : "Penawaran telah ditolak. Tim MOHAN Digital Lab's akan menghubungi Anda."}
                             </div>
                         )}
 

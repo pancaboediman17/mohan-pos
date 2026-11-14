@@ -21,9 +21,11 @@ class AdminDashboardController extends Controller
         ]);
 
         $user = $request->user();
-        $requestedBranchId = $validated['branch_id'] ?? null;
+        $requestedBranchId = isset($validated['branch_id'])
+            ? (int) $validated['branch_id']
+            : null;
 
-        if ($user->branch_id) {
+        if ($user->branch_id && ! $user->hasGlobalBranchAccess()) {
             if (
                 $requestedBranchId &&
                 (int) $requestedBranchId !== (int) $user->branch_id
@@ -92,7 +94,7 @@ class AdminDashboardController extends Controller
             ->get()
             ->mapWithKeys(fn ($row) => [$row->status => (int) $row->total]);
 
-        $branchOptions = $user->branch_id
+        $branchOptions = $user->branch_id && ! $user->hasGlobalBranchAccess()
             ? Branch::query()->whereKey($user->branch_id)->get(['id', 'name'])
             : ($user->can('branches.view')
                 ? Branch::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
@@ -148,7 +150,7 @@ class AdminDashboardController extends Controller
                         ->whereIn('payment_status', ['unpaid', 'partial'])
                         ->sum('balance'),
                     'production_queue' => $activeOrders()
-                        ->whereIn('status', ['pending', 'processing'])
+                        ->whereIn('status', ['pending', 'processing', 'ready_for_confirmation'])
                         ->count(),
                     'overdue_orders' => $activeOrders()
                         ->whereNotNull('due_date')
@@ -174,6 +176,7 @@ class AdminDashboardController extends Controller
                 'status_counts' => [
                     'pending' => $statusCounts->get('pending', 0),
                     'processing' => $statusCounts->get('processing', 0),
+                    'ready_for_confirmation' => $statusCounts->get('ready_for_confirmation', 0),
                     'completed' => $statusCounts->get('completed', 0),
                     'cancelled' => $statusCounts->get('cancelled', 0),
                 ],

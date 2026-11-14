@@ -19,7 +19,10 @@ class InventoryController extends Controller
     {
         $branches = Branch::query()
             ->where('is_active', true)
-            ->when($request->user()->branch_id, fn ($query, $id) => $query->whereKey($id))
+            ->when(
+                $request->user()->branch_id && ! $request->user()->hasGlobalBranchAccess(),
+                fn ($query, $id) => $query->whereKey($id),
+            )
             ->orderByDesc('is_production_hub')
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'is_production_hub']);
@@ -227,7 +230,9 @@ class InventoryController extends Controller
         $user = $request->user();
         abort_unless($workOrder->production_branch_id, 409, 'Tentukan cabang produksi Work Order terlebih dahulu.');
         abort_if(
-            $user->branch_id && $workOrder->production_branch_id !== $user->branch_id,
+            $user->branch_id &&
+                ! $user->hasGlobalBranchAccess() &&
+                $workOrder->production_branch_id !== $user->branch_id,
             403,
             'Work Order ini berada di cabang produksi lain.',
         );
@@ -276,7 +281,7 @@ class InventoryController extends Controller
 
     private function resolveBranchId(Request $request, ?int $requestedBranchId): ?int
     {
-        if ($request->user()->branch_id) {
+        if ($request->user()->branch_id && ! $request->user()->hasGlobalBranchAccess()) {
             return $request->user()->branch_id;
         }
 

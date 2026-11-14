@@ -226,7 +226,9 @@ class OrderItemDesignController extends Controller
             ?? $orderItem->order->branch_id;
 
         abort_if(
-            $user->branch_id && $branchId !== $user->branch_id,
+            $user->branch_id &&
+                ! $user->hasGlobalBranchAccess() &&
+                $branchId !== $user->branch_id,
             403,
             'Desain pesanan ini berada di cabang lain.',
         );

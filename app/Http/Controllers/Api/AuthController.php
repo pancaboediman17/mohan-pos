@@ -36,10 +36,10 @@ class AuthController extends Controller
 
         // Hapus token lama untuk menjaga satu sesi aktif per perangkat ini.
         $user->tokens()
-            ->where('name', 'printflow-web')
+            ->whereIn('name', ['printflow-web', 'mohan-digital-labs-web'])
             ->delete();
 
-        $token = $user->createToken('printflow-web')->plainTextToken;
+        $token = $user->createToken('mohan-digital-labs-web')->plainTextToken;
 
         return response()->json([
             'success' => true,

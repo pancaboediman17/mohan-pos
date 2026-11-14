@@ -20,7 +20,7 @@ class BusinessProfileTest extends TestCase
         $this->actingAs($owner)
             ->getJson('/api/v1/business-profile')
             ->assertOk()
-            ->assertJsonPath('data.business_name', 'PRINTFLOW POS');
+            ->assertJsonPath('data.business_name', "MOHAN Digital Lab's");
 
         $this->putJson('/api/v1/business-profile', [
             'business_name' => 'Mohan Print Studio',
@@ -43,7 +43,7 @@ class BusinessProfileTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->getJson('/api/v1/public/business-profile')
             ->assertOk()
-            ->assertJsonPath('data.business_name', 'PRINTFLOW POS');
+            ->assertJsonPath('data.business_name', "MOHAN Digital Lab's");
 
         $cashier = User::factory()->create();
         $cashier->assignRole('Kasir');
@@ -66,7 +66,7 @@ class BusinessProfileTest extends TestCase
 
         $this->assertDatabaseHas('business_profiles', [
             'id' => 1,
-            'business_name' => 'PRINTFLOW POS',
+            'business_name' => "MOHAN Digital Lab's",
         ]);
     }
 }

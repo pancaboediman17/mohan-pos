@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\BusinessProfileController;
 use App\Http\Controllers\Api\CashierDashboardController;
+use App\Http\Controllers\Api\CashRegisterController;
 use App\Http\Controllers\Api\ChatMessageController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\FinishingTypeController;
@@ -12,7 +13,10 @@ use App\Http\Controllers\Api\HRController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\OrderCustomerFileController;
+use App\Http\Controllers\Api\OrderShipmentController;
 use App\Http\Controllers\Api\OrderItemDesignController;
+use App\Http\Controllers\Api\MarketplaceOrderImportController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProductCategoryController;
 use App\Http\Controllers\Api\ProductController;
@@ -38,6 +42,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/public/designs/{token}', [OrderItemDesignController::class, 'showPublic']);
         Route::get('/public/designs/{token}/file', [OrderItemDesignController::class, 'file']);
         Route::post('/public/designs/{token}/decision', [OrderItemDesignController::class, 'decide']);
+        Route::get('/public/orders/{token}/upload', [OrderCustomerFileController::class, 'showPublic']);
+        Route::post('/public/orders/{token}/files', [OrderCustomerFileController::class, 'storePublic']);
     });
 
     // Route yang memerlukan login
@@ -48,6 +54,12 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/cashier-dashboard', CashierDashboardController::class)
             ->middleware('can:dashboard.view');
+        Route::get('/cash-register', [CashRegisterController::class, 'index'])
+            ->middleware('can:payments.view');
+        Route::post('/cash-register/open', [CashRegisterController::class, 'open'])
+            ->middleware('can:payments.create');
+        Route::post('/cash-register/close', [CashRegisterController::class, 'close'])
+            ->middleware('can:payments.create');
         Route::get('/admin-dashboard', AdminDashboardController::class)
             ->middleware('can:dashboard.view');
         Route::get('/reports', [ReportController::class, 'index'])
@@ -60,6 +72,14 @@ Route::prefix('v1')->group(function () {
             ->middleware(['can:chat.access', 'throttle:60,1']);
         Route::post('/chat/messages', [ChatMessageController::class, 'store'])
             ->middleware(['can:chat.access', 'throttle:30,1']);
+        Route::get('/chat/contacts', [ChatMessageController::class, 'contacts'])
+            ->middleware(['can:chat.access', 'throttle:30,1']);
+        Route::get('/chat/unread', [ChatMessageController::class, 'unread'])
+            ->middleware(['can:chat.access', 'throttle:60,1']);
+        Route::post('/chat/read', [ChatMessageController::class, 'markRead'])
+            ->middleware(['can:chat.access', 'throttle:60,1']);
+        Route::post('/chat/presence', [ChatMessageController::class, 'presence'])
+            ->middleware(['can:chat.access', 'throttle:60,1']);
         Route::get('/business-profile', [BusinessProfileController::class, 'show'])
             ->middleware('can:settings.manage');
         Route::put('/business-profile', [BusinessProfileController::class, 'update'])
@@ -181,8 +201,22 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('can:orders.create')->group(function () {
             Route::post('/orders', [OrderController::class, 'store']);
+            Route::get('/marketplace/orders/template', [MarketplaceOrderImportController::class, 'template']);
+            Route::post('/marketplace/orders/import/preview', [MarketplaceOrderImportController::class, 'preview'])
+                ->middleware('throttle:10,1');
+            Route::post('/marketplace/orders/import', [MarketplaceOrderImportController::class, 'import'])
+                ->middleware('throttle:10,1');
         });
         Route::post('/orders/{order}/approval-link', [OrderController::class, 'approvalLink'])
+            ->middleware('can:orders.edit');
+        Route::post('/orders/{order}/confirm-completion', [OrderController::class, 'confirmCompletion'])
+            ->middleware('can:orders.edit');
+        Route::post('/orders/{order}/customer-upload-link', [OrderCustomerFileController::class, 'createUploadLink'])
+            ->middleware('can:orders.edit');
+        Route::get('/orders/{order}/customer-files/{customerFile}/file', [OrderCustomerFileController::class, 'file']);
+        Route::post('/orders/{order}/confirm-marketplace', [QuoteApprovalController::class, 'confirmMarketplace'])
+            ->middleware('can:orders.edit');
+        Route::put('/orders/{order}/shipment', [OrderShipmentController::class, 'update'])
             ->middleware('can:orders.edit');
 
         Route::middleware('can:production.view')->get('/work-orders', [WorkOrderController::class, 'index']);

@@ -9,6 +9,7 @@ class ChatMessage extends Model
 {
     protected $fillable = [
         'user_id',
+        'recipient_id',
         'sender_name',
         'body',
     ];
@@ -16,5 +17,10 @@ class ChatMessage extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function recipient(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recipient_id');
     }
 }

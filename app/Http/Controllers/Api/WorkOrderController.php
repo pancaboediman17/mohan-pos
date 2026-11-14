@@ -12,7 +12,8 @@ use Illuminate\Validation\Rule;
 class WorkOrderController extends Controller
 {
     private const TRANSITIONS = [
-        'queued' => 'printing',
+        'queued' => 'accepted',
+        'accepted' => 'printing',
         'printing' => 'finishing',
         'finishing' => 'quality_check',
         'quality_check' => 'ready',
@@ -27,6 +28,7 @@ class WorkOrderController extends Controller
                 'design_approval',
                 'design_revision',
                 'queued',
+                'accepted',
                 'printing',
                 'finishing',
                 'quality_check',
@@ -37,7 +39,10 @@ class WorkOrderController extends Controller
         ]);
         $user = $request->user();
         $query = WorkOrder::query()
-            ->when($user->branch_id, fn ($builder) => $builder->where('production_branch_id', $user->branch_id));
+            ->when(
+                $user->branch_id && ! $user->hasGlobalBranchAccess(),
+                fn ($builder) => $builder->where('production_branch_id', $user->branch_id),
+            );
         $summary = (clone $query)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
@@ -49,6 +54,8 @@ class WorkOrderController extends Controller
                 'order.customer:id,name',
                 'item:id,order_id,product_name,quantity,unit_name,width,height,specifications,notes',
                 'item.latestDesign',
+                'order.customerFiles:id,order_id,order_item_id,original_filename,mime_type,file_size,note,created_at',
+                'order.customerFiles.item:id,product_name',
                 'productionBranch:id,code,name',
                 'machine:id,branch_id,machine_code,name',
             ])
@@ -69,7 +76,9 @@ class WorkOrderController extends Controller
     {
         $user = $request->user();
         abort_if(
-            $user->branch_id && $workOrder->production_branch_id !== $user->branch_id,
+            $user->branch_id &&
+                ! $user->hasGlobalBranchAccess() &&
+                $workOrder->production_branch_id !== $user->branch_id,
             403,
             'Work order ini berada di cabang produksi lain.',
         );
@@ -141,6 +150,8 @@ class WorkOrderController extends Controller
                     'order.customer:id,name',
                     'item:id,order_id,product_name,quantity,unit_name,width,height,specifications,notes',
                     'item.latestDesign',
+                    'order.customerFiles:id,order_id,order_item_id,original_filename,mime_type,file_size,note,created_at',
+                    'order.customerFiles.item:id,product_name',
                     'productionBranch:id,code,name',
                     'machine:id,branch_id,machine_code,name',
                 ]),
@@ -154,10 +165,10 @@ class WorkOrderController extends Controller
         $statuses = $order->workOrders()->pluck('status');
 
         if ($statuses->isNotEmpty() && $statuses->every(fn ($status) => $status === 'completed')) {
-            $order->update(['status' => 'completed']);
+            $order->update(['status' => 'ready_for_confirmation']);
         } elseif ($statuses->contains(fn ($status) => in_array(
             $status,
-            ['printing', 'finishing', 'quality_check', 'ready'],
+            ['accepted', 'printing', 'finishing', 'quality_check', 'ready'],
             true,
         ))) {
             $order->update(['status' => 'processing']);

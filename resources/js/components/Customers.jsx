@@ -527,7 +527,7 @@ export default function Customers({ user, canManage = false }) {
                                     {editingCustomer ? 'Edit Pelanggan' : 'Tambah Pelanggan'}
                                 </h3>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    Lengkapi informasi pelanggan PRINTFLOW.
+                                    Lengkapi informasi pelanggan MOHAN Digital Lab's.
                                 </p>
                             </div>
                             <button
