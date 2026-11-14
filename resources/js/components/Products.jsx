@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Package, Plus, Search, RefreshCw, Pencil, Power, Trash2,
     Eye, X, ChevronLeft, ChevronRight, AlertCircle, Calculator,
-    Layers, TrendingUp, Wallet, Box, Save, PlusCircle, MinusCircle
+    Layers, TrendingUp, Box, Save, PlusCircle, MinusCircle
 } from 'lucide-react';
 import api from '../services/api';
 

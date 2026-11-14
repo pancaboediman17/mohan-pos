@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ClipboardList, Plus, Search, Eye, RefreshCw, X, Trash2,
-    CalendarDays, UserRound, Package, Wallet, AlertCircle,
+    Package, Wallet, AlertCircle, Printer,
+    Copy, Link2,
 } from 'lucide-react';
 import api from '../services/api';
+import { InvoicePrintDocument } from './TransactionDocuments';
 
 const money = (value) => new Intl.NumberFormat('id-ID', {
     style: 'currency',
@@ -62,10 +64,16 @@ function Field({ label, children }) {
     );
 }
 
-export default function Orders({ user, canCreate = false }) {
+export default function Orders({
+    canCreate = false,
+    canEdit = false,
+    autoOpenCreate = false,
+    onAutoOpenHandled,
+}) {
     const [orders, setOrders] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [products, setProducts] = useState([]);
+    const [finishingTypes, setFinishingTypes] = useState([]);
     const [pagination, setPagination] = useState(null);
 
     const [loading, setLoading] = useState(true);
@@ -77,6 +85,8 @@ export default function Orders({ user, canCreate = false }) {
     const [showForm, setShowForm] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [formError, setFormError] = useState('');
+    const [approvalLinkLoading, setApprovalLinkLoading] = useState(false);
+    const [approvalLinkError, setApprovalLinkError] = useState('');
 
     const emptyItem = () => ({
         product_id: '',
@@ -85,6 +95,7 @@ export default function Orders({ user, canCreate = false }) {
         height: '',
         specifications: '',
         notes: '',
+        finishing_type_ids: [],
     });
 
     const [form, setForm] = useState({
@@ -123,17 +134,25 @@ export default function Orders({ user, canCreate = false }) {
 
     const loadMasterData = useCallback(async () => {
         try {
-            const [customerResponse, productResponse] = await Promise.all([
+            const requests = [
                 api.get('/api/v1/customers', { params: { per_page: 100 } }),
                 api.get('/api/v1/products', { params: { per_page: 100 } }),
-            ]);
+            ];
+
+            if (canCreate) {
+                requests.push(api.get('/api/v1/order-finishing-types'));
+            }
+
+            const [customerResponse, productResponse, finishingResponse] =
+                await Promise.all(requests);
 
             setCustomers(listData(customerResponse));
             setProducts(listData(productResponse));
+            setFinishingTypes(finishingResponse?.data?.data || []);
         } catch (err) {
             console.error('Gagal memuat master data:', err);
         }
-    }, []);
+    }, [canCreate]);
 
     useEffect(() => {
         loadOrders(1);
@@ -167,6 +186,16 @@ export default function Orders({ user, canCreate = false }) {
                 itemIndex === index ? { ...item, [field]: value } : item,
             ),
         }));
+    };
+
+    const toggleFinishing = (index, finishingTypeId) => {
+        const selectedIds = form.items[index].finishing_type_ids;
+        const id = String(finishingTypeId);
+        const nextIds = selectedIds.includes(id)
+            ? selectedIds.filter((selectedId) => selectedId !== id)
+            : [...selectedIds, id];
+
+        updateItem(index, 'finishing_type_ids', nextIds);
     };
 
     const addItem = () => {
@@ -228,13 +257,20 @@ export default function Orders({ user, canCreate = false }) {
                     height: item.height ? Number(item.height) : null,
                     specifications: item.specifications || null,
                     notes: item.notes || null,
+                    finishing_type_ids: item.finishing_type_ids.map(Number),
                 })),
             };
 
-            await api.post('/api/v1/orders', payload);
+            const response = await api.post('/api/v1/orders', payload);
 
             setShowForm(false);
             resetForm();
+            setSelectedOrder(response.data?.data
+                ? {
+                      ...response.data.data,
+                      approval_url: response.data.approval_url,
+                  }
+                : null);
             await loadOrders(1);
         } catch (err) {
             const validationErrors = err.response?.data?.errors;
@@ -252,8 +288,52 @@ export default function Orders({ user, canCreate = false }) {
         try {
             const response = await api.get(`/api/v1/orders/${order.id}`);
             setSelectedOrder(response.data?.data || response.data);
+            setApprovalLinkError('');
         } catch (err) {
             setError(err.response?.data?.message || 'Gagal memuat detail pesanan.');
+        }
+    };
+
+    const createApprovalLink = async () => {
+        if (!selectedOrder) return;
+        if (
+            selectedOrder.approval_url &&
+            !window.confirm(
+                'Buat tautan baru? Tautan persetujuan yang lama akan dinonaktifkan.',
+            )
+        ) {
+            return;
+        }
+
+        setApprovalLinkLoading(true);
+        setApprovalLinkError('');
+
+        try {
+            const response = await api.post(
+                `/api/v1/orders/${selectedOrder.id}/approval-link`,
+            );
+            setSelectedOrder((current) => ({
+                ...current,
+                approval_url: response.data?.approval_url,
+            }));
+        } catch (err) {
+            setApprovalLinkError(
+                err.response?.data?.message ||
+                    'Gagal membuat tautan persetujuan.',
+            );
+        } finally {
+            setApprovalLinkLoading(false);
+        }
+    };
+
+    const copyApprovalLink = async () => {
+        try {
+            await navigator.clipboard.writeText(selectedOrder.approval_url);
+            setApprovalLinkError('');
+        } catch {
+            setApprovalLinkError(
+                'Tidak dapat menyalin otomatis. Salin tautan dari kolom di bawah.',
+            );
         }
     };
 
@@ -261,6 +341,16 @@ export default function Orders({ user, canCreate = false }) {
         resetForm();
         setShowForm(true);
     };
+
+    useEffect(() => {
+        if (!autoOpenCreate) return;
+
+        if (canCreate) {
+            openCreateForm();
+        }
+
+        onAutoOpenHandled?.();
+    }, [autoOpenCreate, canCreate, onAutoOpenHandled]);
 
     return (
         <div className="space-y-6">
@@ -372,15 +462,16 @@ export default function Orders({ user, canCreate = false }) {
                                 <th>Total</th>
                                 <th>Sisa Tagihan</th>
                                 <th>Status Pesanan</th>
+                                <th>Persetujuan Quote</th>
                                 <th>Pembayaran</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="8" className="text-center py-8">Memuat data pesanan...</td></tr>
+                                <tr><td colSpan="9" className="text-center py-8">Memuat data pesanan...</td></tr>
                             ) : orders.length === 0 ? (
-                                <tr><td colSpan="8" className="text-center py-8 text-slate-500">Belum ada data pesanan.</td></tr>
+                                <tr><td colSpan="9" className="text-center py-8 text-slate-500">Belum ada data pesanan.</td></tr>
                             ) : orders.map((order) => (
                                 <tr key={order.id}>
                                     <td className="font-semibold text-white">{order.order_number}</td>
@@ -389,6 +480,23 @@ export default function Orders({ user, canCreate = false }) {
                                     <td className="text-white">{money(order.total)}</td>
                                     <td className="text-amber-400">{money(order.balance)}</td>
                                     <td><StatusBadge status={order.status} /></td>
+                                    <td>
+                                        <span
+                                            className={`status-badge ${
+                                                order.quote_status === 'approved'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : order.quote_status === 'rejected'
+                                                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                            }`}
+                                        >
+                                            {order.quote_status === 'approved'
+                                                ? 'Disetujui'
+                                                : order.quote_status === 'rejected'
+                                                  ? 'Ditolak'
+                                                  : 'Menunggu'}
+                                        </span>
+                                    </td>
                                     <td><StatusBadge status={order.payment_status} /></td>
                                     <td>
                                         <button
@@ -486,6 +594,13 @@ export default function Orders({ user, canCreate = false }) {
                                         const product = products.find(
                                             (product) => String(product.id) === String(item.product_id),
                                         );
+                                        const selectedFinishingTypes = finishingTypes.filter(
+                                            (finishingType) => item.finishing_type_ids.includes(String(finishingType.id)),
+                                        );
+                                        const finishingUnitCost = selectedFinishingTypes.reduce(
+                                            (sum, finishingType) => sum + Number(finishingType.default_cost || 0),
+                                            0,
+                                        );
 
                                         return (
                                             <div key={index} className="rounded-xl border border-slate-700 p-4 space-y-3">
@@ -556,10 +671,54 @@ export default function Orders({ user, canCreate = false }) {
                                                     </Field>
                                                 </div>
 
+                                                <div className="space-y-2">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-slate-300">
+                                                            Finishing
+                                                        </p>
+                                                        <p className="text-xs text-slate-500">
+                                                            Biaya default menambah HPP internal per unit, bukan tagihan pelanggan.
+                                                        </p>
+                                                    </div>
+                                                    {finishingTypes.length > 0 ? (
+                                                        <div className="grid gap-2 sm:grid-cols-2">
+                                                            {finishingTypes.map((finishingType) => (
+                                                                <label
+                                                                    key={finishingType.id}
+                                                                    className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-700 p-3 text-sm"
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={item.finishing_type_ids.includes(String(finishingType.id))}
+                                                                        onChange={() => toggleFinishing(index, finishingType.id)}
+                                                                    />
+                                                                    <span className="min-w-0">
+                                                                        <span className="block text-slate-200">
+                                                                            {finishingType.name}
+                                                                        </span>
+                                                                        <span className="block text-xs text-slate-500">
+                                                                            {finishingType.code} · {money(finishingType.default_cost)} / unit
+                                                                        </span>
+                                                                    </span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-xs text-slate-500">
+                                                            Belum ada finishing aktif.
+                                                        </p>
+                                                    )}
+                                                    {selectedFinishingTypes.length > 0 && (
+                                                        <p className="text-xs text-slate-400">
+                                                            Tambahan HPP: {money(finishingUnitCost)} / unit
+                                                        </p>
+                                                    )}
+                                                </div>
+
                                                 <Field label="Spesifikasi">
                                                     <input
                                                         className="form-input"
-                                                        placeholder="Contoh: Flexi Korea, finishing mata ayam..."
+                                                        placeholder="Contoh: Bahan Flexi Korea, warna, atau catatan khusus..."
                                                         value={item.specifications}
                                                         onChange={(event) => updateItem(index, 'specifications', event.target.value)}
                                                     />
@@ -663,7 +822,76 @@ export default function Orders({ user, canCreate = false }) {
                                 <p className="text-xs text-slate-500">Status Pembayaran</p>
                                 <div className="mt-1"><StatusBadge status={selectedOrder.payment_status} /></div>
                             </div>
+                            <div>
+                                <p className="text-xs text-slate-500">Persetujuan Penawaran</p>
+                                <span
+                                    className={`status-badge ${
+                                        selectedOrder.quote_status === 'approved'
+                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                            : selectedOrder.quote_status === 'rejected'
+                                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                    }`}
+                                >
+                                    {selectedOrder.quote_status === 'approved'
+                                        ? 'Disetujui'
+                                        : selectedOrder.quote_status === 'rejected'
+                                          ? 'Ditolak'
+                                          : 'Menunggu jawaban'}
+                                </span>
+                            </div>
                         </div>
+
+                        {selectedOrder.quote_status === 'pending' && canEdit && (
+                            <section className="mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-sm font-semibold text-white">
+                                            Tautan persetujuan pelanggan
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            Produksi menunggu persetujuan. DP tetap dapat diterima.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="secondary-button"
+                                        onClick={createApprovalLink}
+                                        disabled={approvalLinkLoading}
+                                    >
+                                        <Link2 size={15} />
+                                        {approvalLinkLoading
+                                            ? 'Membuat tautan...'
+                                            : selectedOrder.approval_url
+                                              ? 'Buat tautan baru'
+                                              : 'Buat tautan persetujuan'}
+                                    </button>
+                                </div>
+                                {selectedOrder.approval_url && (
+                                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                        <input
+                                            className="form-input min-w-0 flex-1"
+                                            value={selectedOrder.approval_url}
+                                            readOnly
+                                            aria-label="Tautan persetujuan pelanggan"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="secondary-button"
+                                            onClick={copyApprovalLink}
+                                        >
+                                            <Copy size={15} />
+                                            Salin tautan
+                                        </button>
+                                    </div>
+                                )}
+                                {approvalLinkError && (
+                                    <p role="alert" className="mt-2 text-sm text-red-400">
+                                        {approvalLinkError}
+                                    </p>
+                                )}
+                            </section>
+                        )}
 
                         <div className="overflow-x-auto">
                             <table className="data-table">
@@ -676,6 +904,11 @@ export default function Orders({ user, canCreate = false }) {
                                             <td>
                                                 <p className="text-white">{item.product_name}</p>
                                                 <p className="text-xs text-slate-500">{item.specifications || '-'}</p>
+                                                {item.finishings?.length > 0 && (
+                                                    <p className="text-xs text-slate-400">
+                                                        Finishing: {item.finishings.map((finishing) => finishing.finishing_name).join(', ')}
+                                                    </p>
+                                                )}
                                             </td>
                                             <td>{Number(item.quantity)} {item.unit_name}</td>
                                             <td>{money(item.unit_price)}</td>
@@ -708,11 +941,29 @@ export default function Orders({ user, canCreate = false }) {
                             <p className="text-sm text-slate-400 mt-5">Catatan: {selectedOrder.notes}</p>
                         )}
 
-                        <div className="flex justify-end mt-6">
+                        <div className="flex flex-wrap justify-between gap-3 mt-6">
+                            <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => window.print()}
+                            >
+                                <Printer size={16} />
+                                {selectedOrder.quote_status === 'approved'
+                                    ? 'Cetak Invoice'
+                                    : 'Cetak Penawaran'}
+                            </button>
                             <button type="button" className="secondary-button" onClick={() => setSelectedOrder(null)}>
                                 Tutup
                             </button>
                         </div>
+                        <InvoicePrintDocument
+                            order={selectedOrder}
+                            documentType={
+                                selectedOrder.quote_status === 'approved'
+                                    ? 'INVOICE'
+                                    : 'PENAWARAN HARGA'
+                            }
+                        />
                     </div>
                 </div>
             )}

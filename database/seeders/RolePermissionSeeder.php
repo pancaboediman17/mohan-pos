@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 class RolePermissionSeeder extends Seeder
@@ -31,11 +31,14 @@ class RolePermissionSeeder extends Seeder
             'suppliers.manage',
             'production.view',
             'production.manage',
+            'designs.manage',
             'inventory.view',
             'inventory.manage',
+            'inventory.consume',
             'reports.view',
             'users.view',
             'users.manage',
+            'hr.manage',
             'chat.access',
             'settings.manage',
         ];
@@ -68,8 +71,10 @@ class RolePermissionSeeder extends Seeder
                 'suppliers.manage',
                 'production.view',
                 'production.manage',
+                'designs.manage',
                 'inventory.view',
                 'inventory.manage',
+                'inventory.consume',
                 'reports.view',
                 'users.view',
                 'users.manage',
@@ -96,7 +101,9 @@ class RolePermissionSeeder extends Seeder
                 'orders.view',
                 'production.view',
                 'production.manage',
+                'designs.manage',
                 'inventory.view',
+                'inventory.consume',
                 'chat.access',
             ],
 
@@ -104,7 +111,12 @@ class RolePermissionSeeder extends Seeder
                 'dashboard.view',
                 'orders.view',
                 'production.view',
+                'designs.manage',
                 'chat.access',
+            ],
+
+            'HR' => [
+                'hr.manage',
             ],
         ];
 

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class OrderItem extends Model
 {
@@ -44,5 +46,24 @@ class OrderItem extends Model
     {
         return $this->belongsTo(Product::class);
     }
-}
 
+    public function finishings(): HasMany
+    {
+        return $this->hasMany(OrderItemFinishing::class);
+    }
+
+    public function designs(): HasMany
+    {
+        return $this->hasMany(OrderItemDesign::class);
+    }
+
+    public function latestDesign(): HasOne
+    {
+        return $this->hasOne(OrderItemDesign::class)->latestOfMany('version');
+    }
+
+    public function workOrder(): HasOne
+    {
+        return $this->hasOne(WorkOrder::class);
+    }
+}

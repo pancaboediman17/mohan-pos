@@ -159,23 +159,6 @@ button {
     padding-top: 14px;
 }
 
-.system-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    color: #94a3b8;
-    font-size: 11px;
-}
-
-.online-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #22c55e;
-    box-shadow: 0 0 10px #22c55e;
-}
-
 .main-content {
     min-height: 100vh;
     margin-left: 250px;
@@ -244,6 +227,10 @@ button {
     height: 7px;
     border-radius: 50%;
     background: #ef4444;
+}
+
+.notification-count {
+    color: #ffffff;
 }
 
 .role-select, .dark-select {
@@ -426,6 +413,13 @@ button {
     filter: brightness(1.15);
 }
 
+.cashier-action:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+    transform: none;
+    filter: none;
+}
+
 .cashier-action span {
     font-size: 15px;
     font-weight: 800;
@@ -512,10 +506,6 @@ button {
     .menu-heading,
     .menu-link span,
     .menu-badge,
-    .system-status {
-        display: none;
-    }
-
     .profile {
         justify-content: center;
         padding: 18px 0;
@@ -766,3 +756,640 @@ button {
 :root[data-theme="light"] .bg-\[\#151b28\],
 :root[data-theme="light"] .bg-\[\#101725\] { background-color: #fff; }
 :root[data-theme="light"] .bg-\[\#0d1320\] { background-color: #f7faff; }
+
+/* Shared modal and form treatment across management screens. */
+.fixed.inset-0.z-50 {
+    z-index: 60;
+    padding: clamp(12px, 3vw, 28px);
+    background: rgba(3, 8, 20, .76);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.fixed.inset-0.z-50 > div {
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    border: 1px solid #30415b;
+    border-radius: 18px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .48);
+    animation: modal-enter .18s ease-out;
+}
+
+.fixed.inset-0.z-50 > .panel {
+    background: #101927;
+}
+
+.form-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.form-field > span {
+    line-height: 1.4;
+    color: #cbd5e1;
+}
+
+.fixed.inset-0.z-50 form label:not(.flex) {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+    color: #cbd5e1;
+}
+
+.fixed.inset-0.z-50 form label:not(.flex) > input,
+.fixed.inset-0.z-50 form label:not(.flex) > select,
+.fixed.inset-0.z-50 form label:not(.flex) > textarea {
+    margin-top: 0;
+}
+
+.form-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid #34445d;
+    border-radius: 10px;
+    outline: none;
+    background: #0b1220;
+    color: #f8fafc;
+    font-size: 14px;
+    line-height: 1.4;
+    transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.form-input:hover:not(:disabled) {
+    border-color: #526782;
+}
+
+.form-input:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .14);
+}
+
+.form-input::placeholder {
+    color: #718096;
+}
+
+textarea.form-input {
+    min-height: 96px;
+    resize: vertical;
+}
+
+.form-input[type="checkbox"] {
+    width: 16px;
+    min-height: 16px;
+    height: 16px;
+    padding: 0;
+    accent-color: #ef4444;
+}
+
+.form-input:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
+
+.fixed.inset-0.z-50 form input:not([type="checkbox"]):not(.form-input),
+.fixed.inset-0.z-50 form select:not(.form-input),
+.fixed.inset-0.z-50 form textarea:not(.form-input) {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid #34445d;
+    border-radius: 10px;
+    outline: none;
+    background: #0b1220;
+    color: #f8fafc;
+    font-size: 14px;
+    line-height: 1.4;
+    transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.fixed.inset-0.z-50 form input:not([type="checkbox"]):not(.form-input):focus,
+.fixed.inset-0.z-50 form select:not(.form-input):focus,
+.fixed.inset-0.z-50 form textarea:not(.form-input):focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .14);
+}
+
+@keyframes modal-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(.99);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+:root[data-theme="light"] .fixed.inset-0.z-50 {
+    background: rgba(15, 23, 42, .52);
+}
+
+:root[data-theme="light"] .fixed.inset-0.z-50 > div {
+    border-color: #c9d9f3;
+    box-shadow: 0 24px 80px rgba(19, 51, 104, .24);
+}
+
+:root[data-theme="light"] .fixed.inset-0.z-50 > .panel {
+    background: #fff;
+}
+
+:root[data-theme="light"] .form-field,
+:root[data-theme="light"] .form-field > span {
+    color: #334155;
+}
+
+:root[data-theme="light"] .fixed.inset-0.z-50 form label:not(.flex) {
+    color: #334155;
+}
+
+:root[data-theme="light"] .form-input {
+    border-color: #cbd8eb;
+    background: #f8fbff;
+    color: #10265a;
+}
+
+:root[data-theme="light"] .form-input:hover:not(:disabled) {
+    border-color: #91add6;
+}
+
+:root[data-theme="light"] .form-input:focus {
+    border-color: #1479ff;
+    box-shadow: 0 0 0 3px rgba(20, 121, 255, .14);
+}
+
+:root[data-theme="light"] .form-input::placeholder {
+    color: #8293ad;
+}
+
+:root[data-theme="light"] .fixed.inset-0.z-50 form input:not([type="checkbox"]):not(.form-input),
+:root[data-theme="light"] .fixed.inset-0.z-50 form select:not(.form-input),
+:root[data-theme="light"] .fixed.inset-0.z-50 form textarea:not(.form-input) {
+    border-color: #cbd8eb;
+    background: #f8fbff;
+    color: #10265a;
+}
+
+:root[data-theme="light"] .fixed.inset-0.z-50 form input:not([type="checkbox"]):not(.form-input):focus,
+:root[data-theme="light"] .fixed.inset-0.z-50 form select:not(.form-input):focus,
+:root[data-theme="light"] .fixed.inset-0.z-50 form textarea:not(.form-input):focus {
+    border-color: #1479ff;
+    box-shadow: 0 0 0 3px rgba(20, 121, 255, .14);
+}
+
+@media (max-width: 640px) {
+    .fixed.inset-0.z-50 > div {
+        max-height: calc(100vh - 24px);
+        border-radius: 15px;
+    }
+}
+
+.print-document {
+    display: none;
+}
+
+.transaction-document {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 186mm;
+    min-height: 245mm;
+    margin: 0 auto;
+    padding: 12mm;
+    background: #fff;
+    color: #172033;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11pt;
+    line-height: 1.45;
+}
+
+.transaction-document__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #172033;
+}
+
+.transaction-document__brand {
+    margin: 0;
+    color: #b91c1c;
+    font-size: 20pt;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.transaction-document__tagline,
+.transaction-document__branch span,
+.transaction-document__party span {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 9pt;
+}
+
+.transaction-document__branch {
+    margin-top: 12px;
+    font-size: 9pt;
+}
+
+.transaction-document__branch strong {
+    display: block;
+}
+
+.transaction-document__number {
+    min-width: 45%;
+    text-align: right;
+}
+
+.transaction-document__number p {
+    margin: 0 0 6px;
+    color: #64748b;
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: .12em;
+}
+
+.transaction-document__number strong {
+    overflow-wrap: anywhere;
+    font-size: 14pt;
+}
+
+.transaction-document__meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 24px 0;
+}
+
+.transaction-document__label,
+.transaction-document__dates span,
+.transaction-document__receipt-details span {
+    display: block;
+    margin: 0 0 5px;
+    color: #64748b;
+    font-size: 9pt;
+}
+
+.transaction-document__party strong,
+.transaction-document__dates strong,
+.transaction-document__receipt-details strong {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 10pt;
+}
+
+.transaction-document__dates > div,
+.transaction-document__receipt-details > div {
+    margin-bottom: 10px;
+}
+
+.transaction-document__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+}
+
+.transaction-document__table th,
+.transaction-document__table td {
+    padding: 9px 7px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: top;
+}
+
+.transaction-document__table th {
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+}
+
+.transaction-document__table th:not(:first-child),
+.transaction-document__table td:not(:first-child) {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.transaction-document__table td:first-child {
+    width: 44%;
+}
+
+.transaction-document__table small {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    white-space: normal;
+}
+
+.transaction-document__totals {
+    width: min(100%, 80mm);
+    margin: 20px 0 0 auto;
+}
+
+.transaction-document__totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 5px 0;
+}
+
+.transaction-document__total {
+    margin: 4px 0;
+    padding: 9px 0 !important;
+    border-top: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    font-size: 12pt;
+}
+
+.transaction-document__balance {
+    color: #b91c1c;
+    font-size: 11pt;
+}
+
+.transaction-document__notes {
+    margin-top: 24px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+}
+
+.transaction-document__notes p {
+    margin: 5px 0 0;
+    white-space: pre-wrap;
+}
+
+.transaction-document__signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 50px;
+    margin-top: 48px;
+}
+
+.transaction-document__signatures > div {
+    display: flex;
+    min-height: 75px;
+    flex-direction: column;
+    justify-content: space-between;
+    color: #64748b;
+    font-size: 9pt;
+}
+
+.transaction-document__signatures strong {
+    padding-top: 8px;
+    border-top: 1px solid #94a3b8;
+    color: #172033;
+}
+
+.transaction-document__footer {
+    margin-top: 28px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 8.5pt;
+    text-align: center;
+}
+
+.transaction-document__receipt-title {
+    padding: 22px 0;
+    border-bottom: 1px dashed #94a3b8;
+    text-align: center;
+}
+
+.transaction-document__receipt-title span,
+.transaction-document__receipt-title strong {
+    display: block;
+}
+
+.transaction-document__receipt-title span {
+    color: #64748b;
+    font-size: 9pt;
+}
+
+.transaction-document__receipt-title strong {
+    margin-top: 5px;
+    font-size: 20pt;
+}
+
+.transaction-document__receipt-details {
+    padding: 16px 0 6px;
+}
+
+.transaction-document--receipt .transaction-document__header {
+    gap: 8px;
+    padding-bottom: 12px;
+}
+
+.transaction-document--receipt .transaction-document__brand {
+    font-size: 16pt;
+}
+
+.transaction-document--receipt .transaction-document__number {
+    min-width: 0;
+    max-width: 52%;
+}
+
+.transaction-document--receipt .transaction-document__number strong {
+    font-size: 9pt;
+}
+
+@page {
+    size: A4;
+    margin: 12mm;
+}
+
+@page invoice-page {
+    size: A5 portrait;
+    margin: 8mm;
+}
+
+@page receipt-page {
+    size: 80mm auto;
+    margin: 3mm;
+}
+
+@media print {
+    html,
+    body {
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        background: #fff !important;
+    }
+
+    body > *:not(.print-document) {
+        display: none !important;
+    }
+
+    body > .print-document {
+        position: static !important;
+        display: block !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        background: #fff !important;
+        color: #172033 !important;
+    }
+
+    body > .print-document--receipt {
+        page: receipt-page;
+    }
+
+    body > .print-document--invoice {
+        page: invoice-page;
+    }
+
+    .transaction-document {
+        max-width: none;
+        min-height: 0;
+        padding: 0;
+        box-shadow: none;
+    }
+
+    .transaction-document--invoice {
+        width: 132mm;
+        max-width: 132mm;
+        font-size: 8pt;
+        line-height: 1.3;
+    }
+
+    .transaction-document--invoice .transaction-document__header {
+        gap: 10px;
+        padding-bottom: 8px;
+        border-bottom-width: 1px;
+    }
+
+    .transaction-document--invoice .transaction-document__brand {
+        font-size: 16pt;
+    }
+
+    .transaction-document--invoice .transaction-document__tagline,
+    .transaction-document--invoice .transaction-document__branch span {
+        margin-top: 2px;
+        font-size: 7pt;
+    }
+
+    .transaction-document--invoice .transaction-document__branch {
+        margin-top: 6px;
+        font-size: 7pt;
+    }
+
+    .transaction-document--invoice .transaction-document__number p {
+        margin-bottom: 3px;
+        font-size: 7pt;
+    }
+
+    .transaction-document--invoice .transaction-document__number strong {
+        font-size: 10pt;
+    }
+
+    .transaction-document--invoice .transaction-document__meta {
+        gap: 12px;
+        margin: 12px 0;
+    }
+
+    .transaction-document--invoice .transaction-document__label,
+    .transaction-document--invoice .transaction-document__dates span {
+        margin-bottom: 3px;
+        font-size: 7pt;
+    }
+
+    .transaction-document--invoice .transaction-document__party strong,
+    .transaction-document--invoice .transaction-document__dates strong {
+        font-size: 8pt;
+    }
+
+    .transaction-document--invoice .transaction-document__dates > div {
+        margin-bottom: 4px;
+    }
+
+    .transaction-document--invoice .transaction-document__table {
+        font-size: 7.5pt;
+    }
+
+    .transaction-document--invoice .transaction-document__table th,
+    .transaction-document--invoice .transaction-document__table td {
+        padding: 4px 3px;
+    }
+
+    .transaction-document--invoice .transaction-document__table th {
+        font-size: 6.5pt;
+    }
+
+    .transaction-document--invoice .transaction-document__table td:first-child {
+        width: 40%;
+    }
+
+    .transaction-document--invoice .transaction-document__table small {
+        margin-top: 2px;
+        font-size: 6.5pt;
+    }
+
+    .transaction-document--invoice .transaction-document__totals {
+        width: min(100%, 70mm);
+        margin-top: 10px;
+    }
+
+    .transaction-document--invoice .transaction-document__totals > div {
+        padding: 2px 0;
+    }
+
+    .transaction-document--invoice .transaction-document__total {
+        margin: 2px 0;
+        padding: 4px 0 !important;
+        font-size: 9pt;
+    }
+
+    .transaction-document--invoice .transaction-document__balance {
+        font-size: 8.5pt;
+    }
+
+    .transaction-document--invoice .transaction-document__notes {
+        margin-top: 10px;
+        padding: 6px;
+    }
+
+    .transaction-document--invoice .transaction-document__notes p {
+        margin-top: 3px;
+    }
+
+    .transaction-document--invoice .transaction-document__signatures {
+        gap: 24px;
+        margin-top: 18px;
+    }
+
+    .transaction-document--invoice .transaction-document__signatures > div {
+        min-height: 44px;
+        font-size: 7pt;
+    }
+
+    .transaction-document--invoice .transaction-document__signatures strong {
+        padding-top: 4px;
+    }
+
+    .transaction-document--invoice .transaction-document__footer {
+        margin-top: 12px;
+        padding-top: 6px;
+        font-size: 7pt;
+    }
+
+    body > .print-document--receipt .transaction-document {
+        width: 74mm;
+        max-width: 74mm;
+        padding: 0;
+        font-size: 9pt;
+    }
+}

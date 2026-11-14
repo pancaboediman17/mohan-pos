@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     CreditCard,
     Wallet,
@@ -8,11 +8,11 @@ import {
     Search,
     X,
     Eye,
-    CalendarDays,
     AlertCircle,
-    CheckCircle2,
+    Printer,
 } from "lucide-react";
 import api from "../services/api";
+import { PaymentReceiptPrintDocument } from "./TransactionDocuments";
 
 const money = (value) =>
     new Intl.NumberFormat("id-ID", {
@@ -80,7 +80,11 @@ function PaymentStatus({ status }) {
     return <span className={`status-badge ${item.style}`}>{item.label}</span>;
 }
 
-export default function Payments({ canCreate = false }) {
+export default function Payments({
+    canCreate = false,
+    autoOpenCreate = false,
+    onAutoOpenHandled,
+}) {
     const [payments, setPayments] = useState([]);
     const [orders, setOrders] = useState([]);
     const [pagination, setPagination] = useState(null);
@@ -231,6 +235,16 @@ export default function Payments({ canCreate = false }) {
         setShowForm(true);
     };
 
+    useEffect(() => {
+        if (!autoOpenCreate) return;
+
+        if (canCreate) {
+            openForm();
+        }
+
+        onAutoOpenHandled?.();
+    }, [autoOpenCreate, canCreate, onAutoOpenHandled]);
+
     const handleOrderChange = (orderId) => {
         const order = orders.find(
             (item) => String(item.id) === String(orderId),
@@ -269,7 +283,7 @@ export default function Payments({ canCreate = false }) {
         setSaving(true);
 
         try {
-            await api.post("/api/v1/payments", {
+            const response = await api.post("/api/v1/payments", {
                 order_id: Number(form.order_id),
                 amount,
                 method: form.method,
@@ -279,6 +293,7 @@ export default function Payments({ canCreate = false }) {
 
             setShowForm(false);
             resetForm();
+            setSelectedPayment(response.data?.data || null);
 
             await Promise.all([loadPayments(1), loadOutstandingOrders()]);
         } catch (err) {
@@ -829,7 +844,15 @@ export default function Payments({ canCreate = false }) {
                             )}
                         </div>
 
-                        <div className="flex justify-end p-5 border-t border-slate-700">
+                        <div className="flex flex-wrap justify-between gap-3 p-5 border-t border-slate-700">
+                            <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => window.print()}
+                            >
+                                <Printer size={16} />
+                                Cetak Struk
+                            </button>
                             <button
                                 type="button"
                                 className="secondary-button"
@@ -839,6 +862,7 @@ export default function Payments({ canCreate = false }) {
                             </button>
                         </div>
                     </div>
+                    <PaymentReceiptPrintDocument payment={selectedPayment} />
                 </div>
             )}
         </div>

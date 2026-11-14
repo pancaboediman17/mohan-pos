@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, Cog, Pencil, Plus, Power, RefreshCw, Trash2, X } from 'lucide-react';
 import api from '../services/api';
 

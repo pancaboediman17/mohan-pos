@@ -12,6 +12,10 @@ class ProductController extends Controller
 {
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $products = Product::with(['category', 'unit'])
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -26,7 +30,7 @@ class ProductController extends Controller
                 $query->where('is_active', $request->status);
             })
             ->latest()
-            ->paginate(10);
+            ->paginate($validated['per_page'] ?? 10);
 
         return response()->json($products);
     }
@@ -84,6 +88,7 @@ class ProductController extends Controller
             'data' => $product->load(['category', 'unit', 'costComponents.unit']),
         ], 201);
     }
+
 
     public function show(Product $product)
     {
@@ -179,4 +184,3 @@ class ProductController extends Controller
         ]);
     }
 }
-

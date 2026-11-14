@@ -1,59 +1,68 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# PRINTFLOW POS
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistem operasional percetakan berbasis Laravel API dan React untuk pesanan, pembayaran, produksi, inventory, laporan, dan pengelolaan karyawan.
 
-## About Laravel
+## Modul
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- POS: pesanan, pelanggan, produk/jasa, pembayaran, kuitansi, dan invoice.
+- Produksi: work order, persetujuan desain/penawaran, finishing, dan pemakaian material.
+- Operasional: cabang, supplier, mesin, laporan, dan chat internal.
+- HR: karyawan, absensi manual atau impor CSV, cuti, payroll, bonus, dan slip gaji.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Payroll saat ini dikelola HR secara manual. Pajak dan BPJS tidak dihitung otomatis. Impor absensi menerima CSV sesuai template di laman HR; baris duplikat dilewati dan data lama tidak ditimpa.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Teknologi dan prasyarat
 
-## Learning Laravel
+- PHP 8.2+, Composer, Node.js/npm.
+- Laravel 12, React 19, Vite 7, Tailwind CSS 4.
+- MySQL atau SQLite sesuai konfigurasi `.env`; tes menggunakan SQLite in-memory.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Menyiapkan lingkungan lokal
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+1. Instal dependensi:
 
-## Laravel Sponsors
+   ```sh
+   composer install
+   npm install
+   ```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+2. Salin `.env.example` menjadi `.env`, lalu atur koneksi database dan `APP_URL`.
+3. Buat application key:
 
-### Premium Partners
+   ```sh
+   php artisan key:generate
+   ```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+4. Jalankan migrasi:
 
-## Contributing
+   ```sh
+   php artisan migrate
+   ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+5. Untuk membuat akun Owner awal, isi `OWNER_NAME`, `OWNER_EMAIL`, dan `OWNER_PASSWORD` di `.env`, kemudian jalankan:
 
-## Code of Conduct
+   ```sh
+   php artisan db:seed
+   ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+   Jangan masukkan kredensial nyata ke Git.
 
-## Security Vulnerabilities
+6. Jalankan server Laravel dan Vite di dua terminal:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+   ```sh
+   php artisan serve
+   ```
 
-## License
+   ```sh
+   npm run dev
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Untuk membuat bundle produksi, jalankan `npm run build`.
+
+## Pengujian
+
+```sh
+php artisan test
+```
+
+Tes memakai database SQLite in-memory yang dikonfigurasi di `phpunit.xml`; data database aplikasi tidak digunakan oleh tes.

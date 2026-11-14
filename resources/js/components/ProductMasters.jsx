@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Tags, Ruler, Plus, Search, RefreshCw, Pencil, Trash2,
     Power, X, Save, Package, AlertCircle, CheckCircle2

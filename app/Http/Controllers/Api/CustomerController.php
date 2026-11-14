@@ -12,6 +12,10 @@ class CustomerController extends Controller
 {
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $customers = Customer::query()
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->search;
@@ -30,7 +34,7 @@ class CustomerController extends Controller
                 $query->where('is_active', $request->boolean('status'));
             })
             ->latest()
-            ->paginate(10)
+            ->paginate($validated['per_page'] ?? 10)
             ->withQueryString();
 
         return response()->json([

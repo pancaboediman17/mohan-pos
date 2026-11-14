@@ -16,7 +16,7 @@ class PaymentController extends Controller
     {
         $user = $request->user();
 
-        $payments = Payment::with(['order.customer', 'receiver'])
+        $payments = Payment::with(['order.customer', 'order.branch', 'receiver'])
             ->when($user->branch_id, function ($query) use ($user) {
                 $query->whereHas('order', function ($q) use ($user) {
                     $q->where('branch_id', $user->branch_id);
@@ -104,7 +104,11 @@ class PaymentController extends Controller
 
         return response()->json([
             'message' => 'Pembayaran berhasil dicatat.',
-            'data' => $payment->load(['order.customer', 'receiver']),
+            'data' => $payment->load([
+                'order.customer',
+                'order.branch',
+                'receiver',
+            ]),
         ], 201);
     }
 }

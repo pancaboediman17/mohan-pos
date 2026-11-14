@@ -8,15 +8,14 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
     private function allowedRoles(Request $request): array
     {
         return $request->user()->hasRole('Owner')
-            ? ['Owner', 'Admin', 'Kasir', 'Operator Produksi', 'Desainer']
-            : ['Kasir', 'Operator Produksi', 'Desainer'];
+            ? ['Owner', 'Admin', 'Kasir', 'Operator Produksi', 'Desainer', 'HR']
+            : ['Kasir', 'Operator Produksi', 'Desainer', 'HR'];
     }
 
     private function authorizeTarget(Request $request, User $user): void

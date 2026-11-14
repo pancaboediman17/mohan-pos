@@ -3,9 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
@@ -13,6 +13,11 @@ class Order extends Model
 
     protected $fillable = [
         'order_number',
+        'quote_status',
+        'quote_approval_token_hash',
+        'quote_approved_at',
+        'quote_rejected_at',
+        'quote_response_note',
         'branch_id',
         'customer_id',
         'created_by',
@@ -27,6 +32,10 @@ class Order extends Model
         'due_date',
     ];
 
+    protected $hidden = [
+        'quote_approval_token_hash',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -36,6 +45,8 @@ class Order extends Model
             'paid_amount' => 'decimal:2',
             'balance' => 'decimal:2',
             'due_date' => 'date',
+            'quote_approved_at' => 'datetime',
+            'quote_rejected_at' => 'datetime',
         ];
     }
 
@@ -62,5 +73,10 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(WorkOrder::class);
     }
 }

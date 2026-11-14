@@ -33,4 +33,9 @@ class Branch extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function materialStockMovements(): HasMany
+    {
+        return $this->hasMany(MaterialStockMovement::class);
+    }
 }

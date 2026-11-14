@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Users, UserPlus, Search, RefreshCw, Pencil,
-    Power, X, ChevronLeft, ChevronRight, ShieldCheck,
+    Power, X, ChevronLeft, ChevronRight,
     UserCheck, UserX, AlertCircle
 } from 'lucide-react';
 import api from '../services/api';
@@ -12,6 +12,7 @@ const ROLE_OPTIONS = [
     'Kasir',
     'Operator Produksi',
     'Desainer',
+    'HR',
 ];
 
 const formatDate = (date) => {
@@ -29,7 +30,7 @@ export default function UserManagement({ user, canManage = false }) {
 
     const availableRoles = isOwner
         ? ROLE_OPTIONS
-        : ['Kasir', 'Operator Produksi', 'Desainer'];
+        : ['Kasir', 'Operator Produksi', 'Desainer', 'HR'];
 
     const [users, setUsers] = useState([]);
     const [branches, setBranches] = useState([]);
@@ -243,6 +244,7 @@ export default function UserManagement({ user, canManage = false }) {
             Kasir: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
             'Operator Produksi': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
             Desainer: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+            HR: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
         };
 
         return styles[role] || 'bg-slate-500/10 text-slate-400 border-slate-500/20';
